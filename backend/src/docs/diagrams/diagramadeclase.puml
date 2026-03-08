@@ -1,0 +1,336 @@
+@startuml
+scale max 4096 width
+hide circle
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+
+' =========================================================
+' DIAGRAMA UML (COMPLETO) - Proyecto Triage Académico
+' Spring Boot + Angular + MariaDB
+' Rol como ENUM (Opción A)
+' TipoSolicitud como ENUM (incluye OTRO)
+' Register movido a AuthController (/auth/register)
+' =========================================================
+
+package "Web (API REST)" as WEB {
+
+  class SolicitudController <<Controller>> {
+    +crear(dto: SolicitudCreateDTO): SolicitudResponseDTO
+    +listar(filtros: SolicitudFilterDTO): List<SolicitudResponseDTO>
+    +clasificar(id: Long, req: ClasificarDTO): SolicitudResponseDTO
+    +asignar(id: Long, req: AsignarDTO): SolicitudResponseDTO
+    +cambiarEstado(id: Long, req: CambiarEstadoDTO): SolicitudResponseDTO
+    +cerrar(id: Long, req: CerrarDTO): SolicitudResponseDTO
+    +detalle(id: Long): SolicitudResponseDTO
+  }
+
+  class UsuarioController <<Controller>> {
+    +listar(): List<UsuarioDTO>
+    +detalle(id: Long): UsuarioDTO
+    +activar(id: Long): void
+    +desactivar(id: Long): void
+  }
+
+  class AuthController <<Controller>> {
+    +register(req: RegisterRequestDTO): AuthResponseDTO
+    +login(req: AuthRequestDTO): AuthResponseDTO
+  }
+
+  class SolicitudCreateDTO <<DTO>> {
+    +descripcion: String
+    +canalOrigen: CanalOrigen
+    +identificacionSolicitante: String
+    +nombreSolicitante: String
+    +emailSolicitante: String
+    +impacto: ImpactoAcademico
+    +fechaLimite: java.time.LocalDateTime
+    +tipoSolicitud: TipoSolicitudNombre
+  }
+
+  class SolicitudFilterDTO <<DTO>> {
+    +estado: EstadoSolicitud
+    +prioridad: Prioridad
+    +tipoSolicitud: TipoSolicitudNombre
+    +canalOrigen: CanalOrigen
+    +responsableId: Long
+    +desde: java.time.LocalDateTime
+    +hasta: java.time.LocalDateTime
+  }
+
+  class SolicitudResponseDTO <<DTO>> {
+    +id: Long
+    +descripcion: String
+    +fechaRegistro: java.time.LocalDateTime
+    +estado: EstadoSolicitud
+    +prioridad: Prioridad
+    +canalOrigen: CanalOrigen
+    +tipoSolicitud: TipoSolicitudNombre
+    +solicitante: String
+    +responsable: String
+    +fechaLimite: java.time.LocalDateTime
+    +impacto: ImpactoAcademico
+  }
+
+  class UsuarioDTO <<DTO>> {
+    +id: Long
+    +nombre: String
+    +email: String
+    +identificacion: String
+    +activo: boolean
+    +rol: RolNombre
+  }
+
+  class AuthRequestDTO <<DTO>> {
+    +email: String
+    +password: String
+  }
+
+  class RegisterRequestDTO <<DTO>> {
+    +nombre: String
+    +email: String
+    +identificacion: String
+    +password: String
+    +rol: RolNombre
+  }
+
+  class AuthResponseDTO <<DTO>> {
+    +token: String
+    +tipo: String
+  }
+
+  ' ======= CORREGIDO: NO inline =======
+  class ClasificarDTO <<DTO>> {
+    +tipoSolicitud: TipoSolicitudNombre
+  }
+
+  class AsignarDTO <<DTO>> {
+    +responsableId: Long
+  }
+
+  class CambiarEstadoDTO <<DTO>> {
+    +nuevoEstado: EstadoSolicitud
+    +observacion: String
+  }
+
+  class CerrarDTO <<DTO>> {
+    +observacion: String
+  }
+}
+
+package "Aplicación (Servicios / Casos de uso)" as APP {
+
+  class SolicitudService <<Service>> {
+    +crear(req: SolicitudCreateDTO): Solicitud
+    +clasificar(id: Long, tipo: TipoSolicitudNombre, actorId: Long): Solicitud
+    +asignarResponsable(id: Long, responsableId: Long, actorId: Long): Solicitud
+    +cambiarEstado(id: Long, nuevo: EstadoSolicitud, obs: String, actorId: Long): Solicitud
+    +cerrar(id: Long, obs: String, actorId: Long): Solicitud
+    +listar(filtros: SolicitudFilterDTO): List<Solicitud>
+    +detalle(id: Long): Solicitud
+  }
+
+  class UsuarioService <<Service>> {
+    +listar(): List<Usuario>
+    +detalle(id: Long): Usuario
+    +activar(id: Long): void
+    +desactivar(id: Long): void
+  }
+
+  class AuthService <<Service>> {
+    +register(req: RegisterRequestDTO): Usuario
+    +login(email: String, password: String): String
+  }
+
+  class HistorialService <<Service>> {
+    +registrarEvento(s: Solicitud, actor: Usuario, accion: AccionHistorial, obs: String, anterior: EstadoSolicitud, nuevo: EstadoSolicitud): void
+  }
+
+  class PriorizacionService <<Service>> {
+    +calcular(s: Solicitud): ResultadoPriorizacion
+  }
+
+  class ResultadoPriorizacion <<ValueObject>> {
+    +prioridad: Prioridad
+    +justificacion: String
+  }
+
+  class MaquinaEstadosSolicitud <<DomainService>> {
+    -transiciones: Map<EstadoSolicitud, Set<EstadoSolicitud>>
+    +validar(actual: EstadoSolicitud, nuevo: EstadoSolicitud): void
+  }
+
+  interface ReglaPriorizacion <<Strategy>> {
+    +evaluar(s: Solicitud): Integer
+    +explicar(s: Solicitud): String
+  }
+
+  class ReglaPorImpacto
+  class ReglaPorFechaLimite
+  class ReglaPorTipo
+
+  interface IAService <<Opcional>> {
+    +sugerirTipo(texto: String): String
+    +resumirHistorial(eventos: List<HistorialSolicitud>): String
+  }
+}
+
+package "Dominio (Entidades)" as DOM {
+
+  class Solicitud <<Entity>> {
+    +id: Long
+    +descripcion: String
+    +fechaRegistro: java.time.LocalDateTime
+    +canalOrigen: CanalOrigen
+    +estadoActual: EstadoSolicitud
+    +prioridad: Prioridad
+    +justificacionPrioridad: String
+    +fechaLimite: java.time.LocalDateTime
+    +impacto: ImpactoAcademico
+    +tipoSolicitud: TipoSolicitudNombre
+  }
+
+  class Usuario <<Entity>> {
+    +id: Long
+    +nombre: String
+    +email: String
+    +identificacion: String
+    +passwordHash: String
+    +activo: boolean
+    +rol: RolNombre
+  }
+
+  class HistorialSolicitud <<Entity>> {
+    +id: Long
+    +fechaHora: java.time.LocalDateTime
+    +accion: AccionHistorial
+    +observacion: String
+    +estadoAnterior: EstadoSolicitud
+    +estadoNuevo: EstadoSolicitud
+  }
+
+  enum EstadoSolicitud {
+    REGISTRADA
+    CLASIFICADA
+    EN_ATENCION
+    ATENDIDA
+    CERRADA
+  }
+
+  enum Prioridad {
+    BAJA
+    MEDIA
+    ALTA
+    CRITICA
+  }
+
+  enum CanalOrigen {
+    CSU
+    CORREO
+    SAC
+    TELEFONICO
+    PRESENCIAL
+  }
+
+  enum AccionHistorial {
+    REGISTRO
+    CLASIFICACION
+    PRIORIZACION
+    ASIGNACION
+    CAMBIO_ESTADO
+    CIERRE
+    OBSERVACION
+  }
+
+  enum ImpactoAcademico {
+    BAJO
+    MEDIO
+    ALTO
+    CRITICO
+  }
+
+  enum RolNombre {
+    ESTUDIANTE
+    ADMINISTRATIVO
+    COORDINADOR
+  }
+
+  enum TipoSolicitudNombre {
+    HOMOLOGACION
+    SOLICITUD_CUPO
+    CANCELACION_ASIGNATURA
+    REGISTRO_ASIGNATURA
+    CONSULTA_ACADEMICA
+    OTRO
+  }
+}
+
+package "Infraestructura (Persistencia / Repositorios)" as INFRA {
+
+  interface SolicitudRepository <<Repository>> {
+    +save(s: Solicitud): Solicitud
+    +findById(id: Long): Optional<Solicitud>
+    +findAllByFiltros(...): List<Solicitud>
+  }
+
+  interface UsuarioRepository <<Repository>> {
+    +save(u: Usuario): Usuario
+    +findById(id: Long): Optional<Usuario>
+    +findByEmail(email: String): Optional<Usuario>
+    +findAll(): List<Usuario>
+  }
+
+  interface HistorialRepository <<Repository>> {
+    +save(h: HistorialSolicitud): HistorialSolicitud
+    +findBySolicitudId(id: Long): List<HistorialSolicitud>
+  }
+}
+
+package "Seguridad (JWT)" as SEC {
+  class SecurityConfig <<Config>>
+  class JwtFilter <<Filter>>
+  class JwtUtil <<Util>> {
+    +generarToken(user: String, roles: List<String>): String
+    +validarToken(token: String): boolean
+    +extraerUsuario(token: String): String
+  }
+}
+
+' ===== Relaciones dominio
+DOM.Solicitud "1" --> "1" DOM.Usuario : solicitante
+DOM.Solicitud "0..1" --> "1" DOM.Usuario : responsable
+DOM.Solicitud "1" o-- "0..*" DOM.HistorialSolicitud : historial
+DOM.HistorialSolicitud "*" --> "1" DOM.Usuario : actor
+
+' ===== Web -> Services
+WEB.SolicitudController --> APP.SolicitudService
+WEB.UsuarioController   --> APP.UsuarioService
+WEB.AuthController      --> APP.AuthService
+
+' ===== Services -> Repos
+APP.SolicitudService --> INFRA.SolicitudRepository
+APP.SolicitudService --> INFRA.UsuarioRepository
+APP.SolicitudService --> INFRA.HistorialRepository
+
+APP.UsuarioService --> INFRA.UsuarioRepository
+APP.AuthService --> INFRA.UsuarioRepository
+APP.HistorialService --> INFRA.HistorialRepository
+
+' ===== Negocio
+APP.SolicitudService --> APP.MaquinaEstadosSolicitud : valida transiciones
+APP.SolicitudService --> APP.PriorizacionService : calcula prioridad
+APP.SolicitudService --> APP.HistorialService : audita cambios
+APP.PriorizacionService --> APP.ReglaPriorizacion : aplica reglas
+APP.PriorizacionService ..> APP.IAService : opcional
+
+APP.ReglaPorImpacto ..|> APP.ReglaPriorizacion
+APP.ReglaPorFechaLimite ..|> APP.ReglaPriorizacion
+APP.ReglaPorTipo ..|> APP.ReglaPriorizacion
+
+' ===== Seguridad
+SEC.SecurityConfig --> SEC.JwtFilter
+SEC.JwtFilter --> SEC.JwtUtil
+WEB.AuthController ..> SEC.JwtUtil : emite token
+
+@enduml
