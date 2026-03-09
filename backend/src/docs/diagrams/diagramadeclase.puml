@@ -1,4 +1,4 @@
-@startuml
+@startuml diagrama_de_clases
 scale max 4096 width
 hide circle
 skinparam classAttributeIconSize 0
@@ -7,11 +7,8 @@ skinparam shadowing false
 skinparam linetype ortho
 
 ' =========================================================
-' DIAGRAMA UML (COMPLETO) - Proyecto Triage Académico
+' DIAGRAMA UML - Proyecto Triage Académico
 ' Spring Boot + Angular + MariaDB
-' Rol como ENUM (Opción A)
-' TipoSolicitud como ENUM (incluye OTRO)
-' Register movido a AuthController (/auth/register)
 ' =========================================================
 
 package "Web (API REST)" as WEB {
