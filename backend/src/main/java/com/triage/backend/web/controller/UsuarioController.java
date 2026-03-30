@@ -24,18 +24,18 @@ public class UsuarioController {
     }
     
     @GetMapping("/{id}")
-    public ResponseEntity<UsuarioDTO> detalle(@PathVariable Long id) {
+    public ResponseEntity<UsuarioDTO> detalle(@PathVariable("id") Long id) {
         return ResponseEntity.ok(usuarioService.detalle(id));
     }
     
     @PatchMapping("/{id}/activar")
-    public ResponseEntity<Void> activar(@PathVariable Long id) {
+    public ResponseEntity<Void> activar(@PathVariable("id") Long id) {
         usuarioService.activar(id);
         return ResponseEntity.noContent().build();
     }
     
     @PatchMapping("/{id}/desactivar")
-    public ResponseEntity<Void> desactivar(@PathVariable Long id) {
+    public ResponseEntity<Void> desactivar(@PathVariable("id") Long id) {
         usuarioService.desactivar(id);
         return ResponseEntity.noContent().build();
     }

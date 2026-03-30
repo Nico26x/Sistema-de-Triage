@@ -27,13 +27,13 @@ public class SolicitudController {
     
     @GetMapping
     public ResponseEntity<List<SolicitudResponseDTO>> listar(
-            @RequestParam(required = false) String estado,
-            @RequestParam(required = false) String prioridad,
-            @RequestParam(required = false) String tipoSolicitud,
-            @RequestParam(required = false) String canalOrigen,
-            @RequestParam(required = false) Long responsableId,
-            @RequestParam(required = false) String desde,
-            @RequestParam(required = false) String hasta) {
+            @RequestParam(value = "estado", required = false) String estado,
+            @RequestParam(value = "prioridad", required = false) String prioridad,
+            @RequestParam(value = "tipoSolicitud", required = false) String tipoSolicitud,
+            @RequestParam(value = "canalOrigen", required = false) String canalOrigen,
+            @RequestParam(value = "responsableId", required = false) Long responsableId,
+            @RequestParam(value = "desde", required = false) String desde,
+            @RequestParam(value = "hasta", required = false) String hasta) {
         
         // Convertir strings a enums (simplificado, se puede mejorar)
         SolicitudFilterDTO filtros = SolicitudFilterDTO.builder()
@@ -44,13 +44,13 @@ public class SolicitudController {
     }
     
     @GetMapping("/{id}")
-    public ResponseEntity<SolicitudResponseDTO> detalle(@PathVariable Long id) {
+    public ResponseEntity<SolicitudResponseDTO> detalle(@PathVariable("id") Long id) {
         return ResponseEntity.ok(solicitudService.detalle(id));
     }
     
     @PutMapping("/{id}/clasificar")
     public ResponseEntity<SolicitudResponseDTO> clasificar(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody ClasificarDTO req) {
         SolicitudResponseDTO response = solicitudService.clasificar(id, req);
         return ResponseEntity.ok(response);
@@ -58,7 +58,7 @@ public class SolicitudController {
     
     @PutMapping("/{id}/asignar")
     public ResponseEntity<SolicitudResponseDTO> asignar(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody AsignarDTO req) {
         SolicitudResponseDTO response = solicitudService.asignarResponsable(id, req);
         return ResponseEntity.ok(response);
@@ -66,7 +66,7 @@ public class SolicitudController {
     
     @PutMapping("/{id}/estado")
     public ResponseEntity<SolicitudResponseDTO> cambiarEstado(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody CambiarEstadoDTO req) {
         SolicitudResponseDTO response = solicitudService.cambiarEstado(id, req);
         return ResponseEntity.ok(response);
@@ -74,14 +74,14 @@ public class SolicitudController {
     
     @PutMapping("/{id}/cerrar")
     public ResponseEntity<SolicitudResponseDTO> cerrar(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody CerrarDTO req) {
         SolicitudResponseDTO response = solicitudService.cerrar(id, req);
         return ResponseEntity.ok(response);
     }
     
     @GetMapping("/{id}/historial")
-    public ResponseEntity<List<HistorialEntryDTO>> historial(@PathVariable Long id) {
+    public ResponseEntity<List<HistorialEntryDTO>> historial(@PathVariable("id") Long id) {
         return ResponseEntity.ok(solicitudService.obtenerHistorial(id));
     }
 }
