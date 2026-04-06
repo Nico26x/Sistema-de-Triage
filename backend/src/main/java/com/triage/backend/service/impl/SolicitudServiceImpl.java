@@ -147,6 +147,10 @@ public class SolicitudServiceImpl implements ISolicitudService {
     public SolicitudResponseDTO asignarResponsable(Long id, AsignarDTO dto) {
         Solicitud solicitud = solicitudRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Solicitud no encontrada"));
+
+        if (solicitud.getEstadoActual() == EstadoSolicitud.CERRADA) {
+            throw new BusinessRuleException("No se puede asignar responsable a una solicitud cerrada");
+        }
         
         Usuario responsable = usuarioRepository.findById(dto.responsableId())
             .orElseThrow(() -> new NotFoundException("Responsable no encontrado"));
