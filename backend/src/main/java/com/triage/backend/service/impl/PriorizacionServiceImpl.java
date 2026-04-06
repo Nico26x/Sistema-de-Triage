@@ -29,6 +29,23 @@ public class PriorizacionServiceImpl implements IPriorizacionService {
             return Prioridad.BAJA;
         }
     }
+
+    public String generarJustificacionPrioridad(ImpactoAcademico impacto, LocalDateTime fechaLimite, 
+                                                 TipoSolicitudNombre tipo) {
+        int puntuacion = calcularPuntuacion(impacto, fechaLimite, tipo);
+        
+        int puntosImpacto = calcularPuntosImpacto(impacto);
+        int puntosFecha = calcularPuntosFechaLimite(fechaLimite);
+        int puntosTipo = calcularPuntosTipo(tipo);
+        
+        return String.format(
+            "Prioridad calculada: Impacto=%s (%d pts), Plazo=%d pts, Tipo=%s (%d pts). Total: %d pts.",
+            impacto != null ? impacto.name() : "N/A", puntosImpacto,
+            puntosFecha,
+            tipo != null ? tipo.name() : "N/A", puntosTipo,
+            puntuacion
+        );
+    }
     
     @Override
     public int calcularPuntuacion(ImpactoAcademico impacto, LocalDateTime fechaLimite, 

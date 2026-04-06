@@ -64,6 +64,9 @@ public class SolicitudServiceImpl implements ISolicitudService {
             .prioridad(priorizacionService.calcularPrioridad(dto.impacto(), 
                                                              dto.fechaLimite(), 
                                                              dto.tipo()))
+            .justificacionPrioridad(priorizacionService.generarJustificacionPrioridad(dto.impacto(),
+                                                                                        dto.fechaLimite(),
+                                                                                        dto.tipo()))
             .build();
         
         Solicitud guardada = solicitudRepository.save(solicitud);
@@ -124,6 +127,9 @@ public class SolicitudServiceImpl implements ISolicitudService {
         solicitud.setPrioridad(priorizacionService.calcularPrioridad(dto.impacto(), 
                                                                       dto.fechaLimite(), 
                                                                       dto.tipoSolicitud()));
+        solicitud.setJustificacionPrioridad(priorizacionService.generarJustificacionPrioridad(dto.impacto(),
+                                                                                                dto.fechaLimite(),
+                                                                                                dto.tipoSolicitud()));
         
         maquinaEstados.validarTransicion(EstadoSolicitud.REGISTRADA, EstadoSolicitud.CLASIFICADA);
         solicitud.setEstadoActual(EstadoSolicitud.CLASIFICADA);

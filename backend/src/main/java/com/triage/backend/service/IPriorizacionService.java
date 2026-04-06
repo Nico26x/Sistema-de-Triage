@@ -8,4 +8,5 @@ import java.time.LocalDateTime;
 public interface IPriorizacionService {
     Prioridad calcularPrioridad(ImpactoAcademico impacto, LocalDateTime fechaLimite, TipoSolicitudNombre tipo);
     int calcularPuntuacion(ImpactoAcademico impacto, LocalDateTime fechaLimite, TipoSolicitudNombre tipo);
+    String generarJustificacionPrioridad(ImpactoAcademico impacto, LocalDateTime fechaLimite, TipoSolicitudNombre tipo);
 }
