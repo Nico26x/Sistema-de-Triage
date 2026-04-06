@@ -59,14 +59,14 @@ public class UsuarioServiceImpl implements IUsuarioService {
     }
     
     private UsuarioDTO toDTO(Usuario usuario) {
-        return UsuarioDTO.builder()
-            .id(usuario.getId())
-            .nombre(usuario.getNombre())
-            .email(usuario.getEmail())
-            .identificacion(usuario.getIdentificacion())
-            .activo(usuario.isActivo())
-            .rol(usuario.getRol())
-            .build();
+        return new UsuarioDTO(
+            usuario.getId(),
+            usuario.getNombre(),
+            usuario.getEmail(),
+            usuario.getIdentificacion(),
+            usuario.isActivo(),
+            usuario.getRol()
+        );
     }
 }
 

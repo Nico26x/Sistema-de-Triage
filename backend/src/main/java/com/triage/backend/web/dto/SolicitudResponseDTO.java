@@ -8,26 +8,17 @@ import com.triage.backend.domain.enums.ImpactoAcademico;
 import com.triage.backend.domain.enums.Prioridad;
 import com.triage.backend.domain.enums.TipoSolicitudNombre;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class SolicitudResponseDTO {
-    private Long id;
-    private String descripcion;
-    private LocalDateTime fechaRegistro;
-    private EstadoSolicitud estado;
-    private Prioridad prioridad;
-    private String justificacionPrioridad;
-    private CanalOrigen canalOrigen;
-    private TipoSolicitudNombre tipoSolicitud;
-    private String solicitante;
-    private String responsable;
-    private LocalDateTime fechaLimite;
-    private ImpactoAcademico impacto;
-}
+public record SolicitudResponseDTO(
+    Long id,
+    String descripcion,
+    LocalDateTime fechaRegistro,
+    EstadoSolicitud estado,
+    Prioridad prioridad,
+    String justificacionPrioridad,
+    CanalOrigen canalOrigen,
+    TipoSolicitudNombre tipoSolicitud,
+    String solicitante,
+    String responsable,
+    LocalDateTime fechaLimite,
+    ImpactoAcademico impacto
+) {}

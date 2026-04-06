@@ -45,7 +45,7 @@ public class SolicitudServiceImpl implements ISolicitudService {
     
     @Override
     public SolicitudResponseDTO crear(SolicitudCreateDTO dto) {
-        Usuario solicitante = usuarioRepository.findById(dto.getSolicitanteId())
+        Usuario solicitante = usuarioRepository.findById(dto.solicitanteId())
             .orElseThrow(() -> new NotFoundException("Solicitante no encontrado"));
         
         if (!solicitante.isActivo()) {
@@ -53,17 +53,17 @@ public class SolicitudServiceImpl implements ISolicitudService {
         }
         
         Solicitud solicitud = Solicitud.builder()
-            .descripcion(dto.getDescripcion())
-            .canalOrigen(dto.getCanal())
+            .descripcion(dto.descripcion())
+            .canalOrigen(dto.canal())
             .estadoActual(EstadoSolicitud.REGISTRADA)
-            .tipoSolicitud(dto.getTipo())
-            .impacto(dto.getImpacto())
-            .fechaLimite(dto.getFechaLimite())
+            .tipoSolicitud(dto.tipo())
+            .impacto(dto.impacto())
+            .fechaLimite(dto.fechaLimite())
             .solicitante(solicitante)
             .fechaRegistro(LocalDateTime.now())
-            .prioridad(priorizacionService.calcularPrioridad(dto.getImpacto(), 
-                                                             dto.getFechaLimite(), 
-                                                             dto.getTipo()))
+            .prioridad(priorizacionService.calcularPrioridad(dto.impacto(), 
+                                                             dto.fechaLimite(), 
+                                                             dto.tipo()))
             .build();
         
         Solicitud guardada = solicitudRepository.save(solicitud);
@@ -77,13 +77,13 @@ public class SolicitudServiceImpl implements ISolicitudService {
     @Override
     public List<SolicitudResponseDTO> listar(SolicitudFilterDTO filtro) {
         List<Solicitud> solicitudes = solicitudRepository.buscarPorFiltros(
-            filtro.getEstado(),
-            filtro.getPrioridad(),
-            filtro.getTipoSolicitud(),
-            filtro.getCanalOrigen(),
-            filtro.getResponsableId(),
-            filtro.getDesde(),
-            filtro.getHasta()
+            filtro.estado(),
+            filtro.prioridad(),
+            filtro.tipoSolicitud(),
+            filtro.canalOrigen(),
+            filtro.responsableId(),
+            filtro.desde(),
+            filtro.hasta()
         );
         
         return solicitudes.stream()
@@ -108,22 +108,22 @@ public class SolicitudServiceImpl implements ISolicitudService {
         }
         
         // Validar que todos los campos requeridos estén presentes
-        if (dto.getTipoSolicitud() == null) {
+        if (dto.tipoSolicitud() == null) {
             throw new BusinessRuleException("El tipo de solicitud es requerido");
         }
-        if (dto.getImpacto() == null) {
+        if (dto.impacto() == null) {
             throw new BusinessRuleException("El impacto es requerido");
         }
-        if (dto.getFechaLimite() == null) {
+        if (dto.fechaLimite() == null) {
             throw new BusinessRuleException("La fecha límite es requerida");
         }
         
-        solicitud.setTipoSolicitud(dto.getTipoSolicitud());
-        solicitud.setImpacto(dto.getImpacto());
-        solicitud.setFechaLimite(dto.getFechaLimite());
-        solicitud.setPrioridad(priorizacionService.calcularPrioridad(dto.getImpacto(), 
-                                                                      dto.getFechaLimite(), 
-                                                                      dto.getTipoSolicitud()));
+        solicitud.setTipoSolicitud(dto.tipoSolicitud());
+        solicitud.setImpacto(dto.impacto());
+        solicitud.setFechaLimite(dto.fechaLimite());
+        solicitud.setPrioridad(priorizacionService.calcularPrioridad(dto.impacto(), 
+                                                                      dto.fechaLimite(), 
+                                                                      dto.tipoSolicitud()));
         
         maquinaEstados.validarTransicion(EstadoSolicitud.REGISTRADA, EstadoSolicitud.CLASIFICADA);
         solicitud.setEstadoActual(EstadoSolicitud.CLASIFICADA);
@@ -131,7 +131,7 @@ public class SolicitudServiceImpl implements ISolicitudService {
         Solicitud guardada = solicitudRepository.save(solicitud);
         
         historialService.registrarEvento(guardada, null, AccionHistorial.CLASIFICACION, 
-                                        dto.getObservacion(), EstadoSolicitud.REGISTRADA, 
+                                        dto.observacion(), EstadoSolicitud.REGISTRADA, 
                                         EstadoSolicitud.CLASIFICADA);
         
         return toResponseDTO(guardada);
@@ -142,7 +142,7 @@ public class SolicitudServiceImpl implements ISolicitudService {
         Solicitud solicitud = solicitudRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Solicitud no encontrada"));
         
-        Usuario responsable = usuarioRepository.findById(dto.getResponsableId())
+        Usuario responsable = usuarioRepository.findById(dto.responsableId())
             .orElseThrow(() -> new NotFoundException("Responsable no encontrado"));
         
         if (!responsable.isActivo()) {
@@ -168,15 +168,15 @@ public class SolicitudServiceImpl implements ISolicitudService {
             throw new BusinessRuleException("No se puede cambiar el estado de una solicitud cerrada");
         }
         
-        maquinaEstados.validarTransicion(solicitud.getEstadoActual(), dto.getNuevoEstado());
+        maquinaEstados.validarTransicion(solicitud.getEstadoActual(), dto.nuevoEstado());
         
         EstadoSolicitud estadoAnterior = solicitud.getEstadoActual();
-        solicitud.setEstadoActual(dto.getNuevoEstado());
+        solicitud.setEstadoActual(dto.nuevoEstado());
         
         Solicitud guardada = solicitudRepository.save(solicitud);
         
         historialService.registrarEvento(guardada, null, AccionHistorial.CAMBIO_ESTADO, 
-                                        dto.getObservacion(), estadoAnterior, dto.getNuevoEstado());
+                                        dto.observacion(), estadoAnterior, dto.nuevoEstado());
         
         return toResponseDTO(guardada);
     }
@@ -196,7 +196,7 @@ public class SolicitudServiceImpl implements ISolicitudService {
         Solicitud guardada = solicitudRepository.save(solicitud);
         
         historialService.registrarEvento(guardada, null, AccionHistorial.CIERRE, 
-                                        dto.getObservacion(), estadoAnterior, 
+                                        dto.observacion(), estadoAnterior, 
                                         EstadoSolicitud.CERRADA);
         
         return toResponseDTO(guardada);
@@ -211,19 +211,19 @@ public class SolicitudServiceImpl implements ISolicitudService {
     }
     
     private SolicitudResponseDTO toResponseDTO(Solicitud solicitud) {
-        return SolicitudResponseDTO.builder()
-            .id(solicitud.getId())
-            .estado(solicitud.getEstadoActual())
-            .prioridad(solicitud.getPrioridad())
-            .justificacionPrioridad(solicitud.getJustificacionPrioridad())
-            .descripcion(solicitud.getDescripcion())
-            .tipoSolicitud(solicitud.getTipoSolicitud())
-            .canalOrigen(solicitud.getCanalOrigen())
-            .impacto(solicitud.getImpacto())
-            .fechaLimite(solicitud.getFechaLimite())
-            .solicitante(solicitud.getSolicitante().getNombre())
-            .responsable(solicitud.getResponsable() != null ? solicitud.getResponsable().getNombre() : null)
-            .fechaRegistro(solicitud.getFechaRegistro())
-            .build();
+        return new SolicitudResponseDTO(
+            solicitud.getId(),
+            solicitud.getDescripcion(),
+            solicitud.getFechaRegistro(),
+            solicitud.getEstadoActual(),
+            solicitud.getPrioridad(),
+            solicitud.getJustificacionPrioridad(),
+            solicitud.getCanalOrigen(),
+            solicitud.getTipoSolicitud(),
+            solicitud.getSolicitante().getNombre(),
+            solicitud.getResponsable() != null ? solicitud.getResponsable().getNombre() : null,
+            solicitud.getFechaLimite(),
+            solicitud.getImpacto()
+        );
     }
 }

@@ -27,14 +27,14 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<UsuarioDTO> register(@RequestBody RegisterRequestDTO req) {
         Usuario usuario = authService.registrar(req);
-        UsuarioDTO dto = UsuarioDTO.builder()
-            .id(usuario.getId())
-            .nombre(usuario.getNombre())
-            .email(usuario.getEmail())
-            .identificacion(usuario.getIdentificacion())
-            .activo(usuario.isActivo())
-            .rol(usuario.getRol())
-            .build();
+        UsuarioDTO dto = new UsuarioDTO(
+            usuario.getId(),
+            usuario.getNombre(),
+            usuario.getEmail(),
+            usuario.getIdentificacion(),
+            usuario.isActivo(),
+            usuario.getRol()
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
     
@@ -44,10 +44,10 @@ public class AuthController {
         
         // Por ahora, simplemente retornar un token placeholder
         // En el Hito 3 se implementará JWT
-        AuthResponseDTO response = AuthResponseDTO.builder()
-            .token("placeholder-token-" + usuario.getId() + "-" + System.currentTimeMillis())
-            .tipo("Bearer")
-            .build();
+        AuthResponseDTO response = new AuthResponseDTO(
+            "placeholder-token-" + usuario.getId() + "-" + System.currentTimeMillis(),
+            "Bearer"
+        );
         
         return ResponseEntity.ok(response);
     }

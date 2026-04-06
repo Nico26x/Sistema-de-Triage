@@ -51,13 +51,13 @@ public class HistorialServiceImpl implements IHistorialService {
     }
     
     private HistorialEntryDTO toDTO(HistorialSolicitud historial) {
-        return HistorialEntryDTO.builder()
-            .fechaHora(historial.getFechaHora())
-            .accion(historial.getAccion())
-            .observacion(historial.getObservacion())
-            .estadoAnterior(historial.getEstadoAnterior())
-            .estadoNuevo(historial.getEstadoNuevo())
-            .actorId(historial.getActor() != null ? historial.getActor().getId() : null)
-            .build();
+        return new HistorialEntryDTO(
+            historial.getFechaHora(),
+            historial.getAccion(),
+            historial.getObservacion(),
+            historial.getEstadoAnterior(),
+            historial.getEstadoNuevo(),
+            historial.getActor() != null ? historial.getActor().getId() : null
+        );
     }
 }

@@ -36,9 +36,9 @@ public class SolicitudController {
             @RequestParam(value = "hasta", required = false) String hasta) {
         
         // Convertir strings a enums (simplificado, se puede mejorar)
-        SolicitudFilterDTO filtros = SolicitudFilterDTO.builder()
-            .responsableId(responsableId)
-            .build();
+        SolicitudFilterDTO filtros = new SolicitudFilterDTO(
+            null, null, null, null, responsableId, null, null
+        );
         
         return ResponseEntity.ok(solicitudService.listar(filtros));
     }

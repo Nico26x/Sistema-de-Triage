@@ -27,22 +27,22 @@ public class AuthServiceImpl implements IAuthService {
     @Override
     public Usuario registrar(RegisterRequestDTO req) {
         // Validar que el email no exista
-        if (usuarioRepository.findByEmail(req.getEmail()).isPresent()) {
+        if (usuarioRepository.findByEmail(req.email()).isPresent()) {
             throw new BusinessRuleException("El email ya está registrado");
         }
         
         // Validar que la identificación no exista
-        if (usuarioRepository.findByIdentificacion(req.getIdentificacion()).isPresent()) {
+        if (usuarioRepository.findByIdentificacion(req.identificacion()).isPresent()) {
             throw new BusinessRuleException("La identificación ya está registrada");
         }
         
         Usuario usuario = Usuario.builder()
-            .nombre(req.getNombre())
-            .email(req.getEmail())
-            .identificacion(req.getIdentificacion())
-            .passwordHash(passwordEncoder.encode(req.getPassword()))
+            .nombre(req.nombre())
+            .email(req.email())
+            .identificacion(req.identificacion())
+            .passwordHash(passwordEncoder.encode(req.password()))
             .activo(true)
-            .rol(req.getRol())
+            .rol(req.rol())
             .build();
         
         return usuarioRepository.save(usuario);
@@ -50,10 +50,10 @@ public class AuthServiceImpl implements IAuthService {
     
     @Override
     public Usuario autenticar(AuthRequestDTO req) {
-        Usuario usuario = usuarioRepository.findByEmail(req.getEmail())
+        Usuario usuario = usuarioRepository.findByEmail(req.email())
             .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
         
-        if (!passwordEncoder.matches(req.getPassword(), usuario.getPasswordHash())) {
+        if (!passwordEncoder.matches(req.password(), usuario.getPasswordHash())) {
             throw new BusinessRuleException("Contraseña incorrecta");
         }
         
