@@ -4,29 +4,34 @@ info:
   title: API del Sistema de Triaje de Solicitudes Académicas SAC
   version: 1.0.0
   description: |
-    API REST para el proyecto universitario SAC (Sistema de Atención y Clasificación).
+    API REST para el proyecto universitario SAC (Sistema de Atención y Clasificación) - Hito 2.
     Centraliza solicitudes académicas, las clasifica y prioriza, asigna personal,
     rastrea el ciclo de vida completo y mantiene un historial auditable.
 
-    ## Autenticación
-    Todos los puntos finales (excepto `/auth/register` y `/auth/login`) requieren un token JWT Bearer válido.
+    ## Estado de Autenticación (Hito 2)
+    **Nota importante:** En esta versión del Hito 2, todos los endpoints son públicos (sin autenticación requerida).
+    La autenticación JWT será implementada completamente en Hito 3.
+    `/auth/login` devuelve un token placeholder, no un JWT real.
 
     ## Roles (enum RolNombre)
-    | Rol             | Permisos (recomendado) |
-    |-----------------|------------------------|
-    | COORDINADOR     | Acceso completo        |
-    | ADMINISTRATIVO  | Gestionar solicitudes/usuarios |
-    | ESTUDIANTE      | Solo lectura (o datos propios) |
+    | Rol             | Descripción |
+    |-----------------|-------------|
+    | COORDINADOR     | Acceso completo (documentado para uso futuro) |
+    | ADMINISTRATIVO  | Gestionar solicitudes/usuarios (documentado para uso futuro) |
+    | ESTUDIANTE      | Crear solicitudes y consultar propias (documentado para uso futuro) |
 
     ## Ciclo de Vida de Solicitudes
     ```
     REGISTRADA -> CLASIFICADA -> EN_ATENCION -> ATENDIDA -> CERRADA
     ```
-    Las solicitudes cerradas no pueden ser modificadas. Las transiciones inválidas devuelven `409 Conflicto`.
+    - Las solicitudes cerradas NO pueden ser modificadas
+    - Solo se puede cerrar una solicitud en estado ATENDIDA
+    - La observación es obligatoria al cerrar
+    - Las transiciones inválidas devuelven 409 Conflict
 
-    ## Reglas de Prioridad (basadas en puntuación)
+    ## Reglas de Prioridad
     La prioridad se calcula a partir de: ImpactoAcademico + FechaLimite (días restantes) + TipoSolicitudNombre.
-    El sistema almacena `prioridad` y `justificacionPrioridad`.
+    El sistema almacena `prioridad` y `justificacionPrioridad` en cada solicitud.
 
 servers:
   - url: http://localhost:8080
@@ -34,14 +39,11 @@ servers:
 
 tags:
   - name: Auth
-    description: Autenticación (JWT)
+    description: Autenticación (registro e inicio de sesión)
   - name: Users
     description: Administración de usuarios
   - name: Requests
-    description: Gestión de solicitudes académicas (solicitudes)
-
-security:
-  - BearerAuth: []
+    description: Gestión de solicitudes académicas
 
 paths:
   /api/v1/auth/register:
@@ -50,9 +52,8 @@ paths:
       summary: Registrar un nuevo usuario
       description: |
         Crea una nueva cuenta de usuario. Por defecto, el usuario se crea con `activo=true`.
-        Punto final público (no requiere token).
+        Este es un endpoint público (no requiere autenticación).
       operationId: register
-      security: []
       requestBody:
         required: true
         content:
@@ -67,28 +68,31 @@ paths:
               rol: ESTUDIANTE
       responses:
         '201':
-          description: Usuario registrado exitosamente (JWT emitido)
+          description: Usuario registrado exitosamente
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponseDTO'
+                $ref: '#/components/schemas/UsuarioDTO'
               example:
-                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                tipo: "Bearer"
+                id: 1
+                nombre: "Juan Perez"
+                email: "juan@uq.edu.co"
+                identificacion: "1094000001"
+                activo: true
+                rol: ESTUDIANTE
         '400':
           $ref: '#/components/responses/BadRequest'
-        '409':
-          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
   /api/v1/auth/login:
     post:
       tags: [Auth]
-      summary: Iniciar sesión y obtener JWT
-      description: Punto final público. Valida credenciales y devuelve un token JWT Bearer.
+      summary: Iniciar sesión
+      description: |
+        Autentica un usuario y devuelve un token (placeholder en Hito 2, JWT en Hito 3).
+        Este es un endpoint público (no requiere autenticación previa).
       operationId: login
-      security: []
       requestBody:
         required: true
         content:
@@ -100,13 +104,13 @@ paths:
               password: "S3cur3P@ss!"
       responses:
         '200':
-          description: Autenticación exitosa
+          description: Autenticación exitosa (token placeholder)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponseDTO'
               example:
-                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                token: "placeholder-token-1-1712512800000"
                 tipo: "Bearer"
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -118,8 +122,8 @@ paths:
   /api/v1/usuarios:
     get:
       tags: [Users]
-      summary: Listar usuarios
-      description: "Lista usuarios. Rol recomendado: ADMINISTRATIVO/COORDINADOR."
+      summary: Listar todos los usuarios
+      description: "Devuelve una lista de todos los usuarios registrados."
       operationId: listUsers
       responses:
         '200':
@@ -143,17 +147,13 @@ paths:
                   identificacion: "1094000002"
                   activo: true
                   rol: ADMINISTRATIVO
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
   /api/v1/usuarios/{id}:
     get:
       tags: [Users]
-      summary: Obtener detalle del usuario
+      summary: Obtener detalle de usuario
       operationId: getUserById
       parameters:
         - $ref: '#/components/parameters/UserId'
@@ -171,10 +171,6 @@ paths:
                 identificacion: "1094000001"
                 activo: true
                 rol: ESTUDIANTE
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -191,10 +187,6 @@ paths:
       responses:
         '204':
           description: Usuario activado (sin contenido)
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -211,10 +203,6 @@ paths:
       responses:
         '204':
           description: Usuario desactivado (sin contenido)
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -224,7 +212,7 @@ paths:
     get:
       tags: [Users]
       summary: Listar usuarios responsables activos
-      description: Devuelve usuarios con `activo=true` (útil para asignaciones).
+      description: Devuelve usuarios con `activo=true` (útil para asignaciones de solicitudes).
       operationId: listActiveResponsibles
       responses:
         '200':
@@ -235,10 +223,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/UsuarioDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              example:
+                - id: 2
+                  nombre: "Maria Admin"
+                  email: "maria@uq.edu.co"
+                  identificacion: "1094000002"
+                  activo: true
+                  rol: ADMINISTRATIVO
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -246,7 +237,11 @@ paths:
     post:
       tags: [Requests]
       summary: Crear una nueva solicitud
-      description: Registra una nueva solicitud en estado `REGISTRADA` y crea la primera entrada del historial.
+      description: |
+        Registra una nueva solicitud en estado `REGISTRADA`.
+        - La prioridad se calcula automáticamente (impacto + fechaLimite + tipo)
+        - Se genera justificacionPrioridad automáticamente
+        - Se crea la primera entrada del historial
       operationId: createSolicitud
       requestBody:
         required: true
@@ -256,33 +251,40 @@ paths:
               $ref: '#/components/schemas/SolicitudCreateDTO'
             example:
               descripcion: "Solicitud de homologación de asignatura"
-              canalOrigen: SAC
-              identificacionSolicitante: "1094000001"
-              nombreSolicitante: "Juan Perez"
-              emailSolicitante: "juan@uq.edu.co"
+              canal: CORREO
+              solicitanteId: 1
               impacto: MEDIO
-              fechaLimite: "2026-03-10T23:59:00Z"
-              tipoSolicitud: HOMOLOGACION
+              fechaLimite: "2026-04-01T23:59:59"
+              tipo: HOMOLOGACION
       responses:
         '201':
-          description: Solicitud creada
+          description: Solicitud creada exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolicitudResponseDTO'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: "Solicitante no encontrado"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
     get:
       tags: [Requests]
       summary: Listar/filtrar solicitudes
-      description: Soporta filtrado por estado, prioridad, tipo, canal, responsable y rango de fecha.
+      description: |
+        Devuelve solicitudes con soporte para filtrado por:
+        - Estado: REGISTRADA, CLASIFICADA, EN_ATENCION, ATENDIDA, CERRADA
+        - Prioridad: BAJA, MEDIA, ALTA, CRITICA
+        - Tipo de solicitud: HOMOLOGACION, SOLICITUD_CUPO, CANCELACION_ASIGNATURA, REGISTRO_ASIGNATURA, CONSULTA_ACADEMICA, OTRO
+        - Canal: CSU, CORREO, SAC, TELEFONICO, PRESENCIAL
+        - Responsable ID
+        - Rango de fechas (ISO 8601 format)
       operationId: listSolicitudes
       parameters:
         - name: estado
@@ -290,39 +292,46 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/EstadoSolicitud'
+          example: CLASIFICADA
         - name: prioridad
           in: query
           required: false
           schema:
             $ref: '#/components/schemas/Prioridad'
+          example: ALTA
         - name: tipoSolicitud
           in: query
           required: false
           schema:
             $ref: '#/components/schemas/TipoSolicitudNombre'
+          example: HOMOLOGACION
         - name: canalOrigen
           in: query
           required: false
           schema:
             $ref: '#/components/schemas/CanalOrigen'
+          example: CORREO
         - name: responsableId
           in: query
           required: false
           schema:
             type: integer
             format: int64
+          example: 2
         - name: desde
           in: query
           required: false
           schema:
             type: string
             format: date-time
+          example: "2026-03-01T00:00:00"
         - name: hasta
           in: query
           required: false
           schema:
             type: string
             format: date-time
+          example: "2026-04-01T23:59:59"
       responses:
         '200':
           description: Lista de solicitudes
@@ -332,12 +341,6 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SolicitudResponseDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -355,10 +358,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolicitudResponseDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -367,8 +366,14 @@ paths:
   /api/v1/solicitudes/{id}/clasificar:
     put:
       tags: [Requests]
-      summary: Clasificar una solicitud (establecer tipoSolicitud)
-      description: Establece `tipoSolicitud` y registra el historial. Si la transición es inválida o está cerrada, devuelve 409.
+      summary: Clasificar una solicitud
+      description: |
+        Clasifica una solicitud (transición REGISTRADA → CLASIFICADA).
+        - Campo `tipoSolicitud`, `impacto` y `fechaLimite` son obligatorios
+        - La prioridad se recalcula
+        - La justificacionPrioridad se regenera
+        - Se registra en el historial
+        - Solo funciona si la solicitud está en estado REGISTRADA
       operationId: clasificarSolicitud
       parameters:
         - $ref: '#/components/parameters/SolicitudId'
@@ -380,21 +385,28 @@ paths:
               $ref: '#/components/schemas/ClasificarDTO'
             example:
               tipoSolicitud: CANCELACION_ASIGNATURA
+              impacto: MEDIO
+              fechaLimite: "2026-04-15T23:59:59"
+              observacion: "Reclasificación por análisis actualizado"
       responses:
         '200':
-          description: Solicitud clasificada
+          description: Solicitud clasificada exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolicitudResponseDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: |
+            Conflicto - La solicitud no está en estado REGISTRADA,
+            o falta alguno de los campos obligatorios (tipoSolicitud, impacto, fechaLimite)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -402,7 +414,10 @@ paths:
     put:
       tags: [Requests]
       summary: Asignar usuario responsable
-      description: Asigna un usuario responsable activo. Si el responsable está inactivo o hay una transición inválida, devuelve 409.
+      description: |
+        Asigna un usuario responsable a la solicitud.
+        - El responsable debe existir y estar activo
+        - No se puede asignar responsable a una solicitud cerrada
       operationId: asignarResponsable
       parameters:
         - $ref: '#/components/parameters/SolicitudId'
@@ -416,19 +431,27 @@ paths:
               responsableId: 2
       responses:
         '200':
-          description: Responsable asignado
+          description: Responsable asignado exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolicitudResponseDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: "Solicitud o responsable no encontrado"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: |
+            Conflicto - El responsable está inactivo,
+            o la solicitud está cerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -436,7 +459,11 @@ paths:
     put:
       tags: [Requests]
       summary: Cambiar estado de la solicitud
-      description: Cambia el estado validando las transiciones del ciclo de vida. Las transiciones inválidas devuelven 409.
+      description: |
+        Cambia el estado de la solicitud validando las transiciones.
+        Transiciones válidas: REGISTRADA → CLASIFICADA → EN_ATENCION → ATENDIDA → CERRADA
+        - Cualquier otra transición devuelve 409 Conflict
+        - Una solicitud cerrada no puede cambiar de estado
       operationId: cambiarEstadoSolicitud
       parameters:
         - $ref: '#/components/parameters/SolicitudId'
@@ -451,19 +478,22 @@ paths:
               observacion: "Inicia atención por responsable asignado"
       responses:
         '200':
-          description: Estado actualizado
+          description: Estado actualizado exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolicitudResponseDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: |
+            Conflicto - Transición inválida, o la solicitud está cerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -472,8 +502,10 @@ paths:
       tags: [Requests]
       summary: Cerrar una solicitud
       description: |
-        Cierra una solicitud. La solicitud debe estar en estado `ATENDIDA`.
-        Se requiere una observación. Si no está en ATENDIDA o falta la observación, devuelve 409.
+        Cierra una solicitud (transición ATENDIDA → CERRADA).
+        - La solicitud DEBE estar en estado ATENDIDA
+        - La observación es obligatoria (no puede estar vacía)
+        - Una solicitud cerrada no puede ser modificada
       operationId: cerrarSolicitud
       parameters:
         - $ref: '#/components/parameters/SolicitudId'
@@ -487,19 +519,23 @@ paths:
               observacion: "Caso resuelto y comunicado al solicitante"
       responses:
         '200':
-          description: Solicitud cerrada
+          description: Solicitud cerrada exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolicitudResponseDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: |
+            Conflicto - La solicitud no está en estado ATENDIDA,
+            ya está cerrada, o falta la observación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -507,13 +543,15 @@ paths:
     get:
       tags: [Requests]
       summary: Obtener historial de auditoría de solicitud
-      description: Devuelve los registros del histórico ordenados cronológicamente.
+      description: |
+        Devuelve el registro completo de cambios y acciones sobre la solicitud,
+        ordenados cronológicamente.
       operationId: getSolicitudHistorial
       parameters:
         - $ref: '#/components/parameters/SolicitudId'
       responses:
         '200':
-          description: Lista del historial
+          description: Lista del historial de auditoría
           content:
             application/json:
               schema:
@@ -521,29 +559,24 @@ paths:
                 items:
                   $ref: '#/components/schemas/HistorialEntryDTO'
               example:
-                - fechaHora: "2026-03-01T10:30:00Z"
+                - fechaHora: "2026-03-01T10:30:00"
                   accion: REGISTRO
-                  observacion: "Registro inicial"
+                  observacion: "Solicitud registrada"
                   estadoAnterior: null
                   estadoNuevo: REGISTRADA
-                  actorId: 2
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                  actorId: 1
+                - fechaHora: "2026-03-01T14:00:00"
+                  accion: CLASIFICACION
+                  observacion: "Clasificada como homologación"
+                  estadoAnterior: REGISTRADA
+                  estadoNuevo: CLASIFICADA
+                  actorId: null
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Token JWT obtenido de /api/v1/auth/login
-
   parameters:
     SolicitudId:
       name: id
@@ -573,11 +606,11 @@ components:
         email:
           type: string
           format: email
+          description: Email del usuario
           example: "juan@uq.edu.co"
         password:
           type: string
-          format: password
-          minLength: 6
+          description: Contraseña del usuario
           example: "S3cur3P@ss!"
 
     RegisterRequestDTO:
@@ -586,24 +619,24 @@ components:
       properties:
         nombre:
           type: string
-          minLength: 2
+          description: Nombre completo del usuario
           example: "Juan Perez"
         email:
           type: string
           format: email
+          description: Email único del usuario
           example: "juan@uq.edu.co"
         identificacion:
           type: string
-          minLength: 1
-          maxLength: 50
+          description: Número de identificación
           example: "1094000001"
         password:
           type: string
-          format: password
-          minLength: 6
+          description: Contraseña del usuario
           example: "S3cur3P@ss!"
         rol:
           $ref: '#/components/schemas/RolNombre'
+          description: Rol del usuario en el sistema
 
     AuthResponseDTO:
       type: object
@@ -611,10 +644,11 @@ components:
       properties:
         token:
           type: string
-          description: Token de acceso JWT
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          description: Token de acceso (placeholder en Hito 2, será JWT en Hito 3)
+          example: "placeholder-token-1-1712512800000"
         tipo:
           type: string
+          description: Tipo de autenticación
           example: "Bearer"
 
     UsuarioDTO:
@@ -624,62 +658,62 @@ components:
         id:
           type: integer
           format: int64
+          description: ID único del usuario
           example: 1
         nombre:
           type: string
+          description: Nombre completo
           example: "Juan Perez"
         email:
           type: string
           format: email
+          description: Email del usuario
           example: "juan@uq.edu.co"
         identificacion:
           type: string
+          description: Número de identificación
           example: "1094000001"
         activo:
           type: boolean
+          description: Estado del usuario (true=activo, false=inactivo)
           example: true
         rol:
           $ref: '#/components/schemas/RolNombre'
+          description: Rol del usuario
 
     SolicitudCreateDTO:
       type: object
       required:
         - descripcion
-        - canalOrigen
-        - identificacionSolicitante
-        - nombreSolicitante
-        - emailSolicitante
+        - canal
+        - solicitanteId
         - impacto
-        - tipoSolicitud
+        - tipo
       properties:
         descripcion:
           type: string
-          minLength: 5
-          maxLength: 2000
-          example: "Solicitud de homologación de asignatura"
-        canalOrigen:
+          description: Descripción detallada de la solicitud
+          example: "Solicitud de homologación de asignatura de pregrado"
+        canal:
           $ref: '#/components/schemas/CanalOrigen'
-        identificacionSolicitante:
-          type: string
-          maxLength: 50
-          example: "1094000001"
-        nombreSolicitante:
-          type: string
-          maxLength: 120
-          example: "Juan Perez"
-        emailSolicitante:
-          type: string
-          format: email
-          example: "juan@uq.edu.co"
+          description: Canal por el cual ingresó la solicitud
+        solicitanteId:
+          type: integer
+          format: int64
+          description: ID del usuario solicitante
+          example: 1
         impacto:
           $ref: '#/components/schemas/ImpactoAcademico'
+          description: Impacto académico de la solicitud
         fechaLimite:
           type: string
           format: date-time
           nullable: true
-          example: "2026-03-10T23:59:00Z"
-        tipoSolicitud:
+          description: Fecha límite de resolución (ISO 8601)
+          example: "2026-04-01T23:59:59"
+        tipo:
           $ref: '#/components/schemas/TipoSolicitudNombre'
+          description: Tipo de solicitud
 
     SolicitudResponseDTO:
       type: object
@@ -697,47 +731,74 @@ components:
         id:
           type: integer
           format: int64
+          description: ID único de la solicitud
           example: 10
         descripcion:
           type: string
+          description: Descripción de la solicitud
           example: "Solicitud de homologación de asignatura"
         fechaRegistro:
           type: string
           format: date-time
-          example: "2026-03-01T10:30:00Z"
+          description: Fecha y hora de registro (ISO 8601)
+          example: "2026-03-01T10:30:00"
         estado:
           $ref: '#/components/schemas/EstadoSolicitud'
+          description: Estado actual de la solicitud
         prioridad:
           $ref: '#/components/schemas/Prioridad'
+          description: Prioridad calculada automáticamente
         justificacionPrioridad:
           type: string
           nullable: true
+          description: Explicación del cálculo de prioridad
           example: "Impacto=MEDIO(+20) + FechaLimite=9d(+5) + Tipo=HOMOLOGACION(+30) => Total=55 => MEDIA"
         canalOrigen:
           $ref: '#/components/schemas/CanalOrigen'
+          description: Canal de entrada de la solicitud
         tipoSolicitud:
           $ref: '#/components/schemas/TipoSolicitudNombre'
+          description: Tipo de solicitud
         solicitante:
           type: string
-          example: "1094000001 - Juan Perez"
+          description: Nombre del solicitante
+          example: "Juan Perez"
         responsable:
           type: string
           nullable: true
-          example: "2 - Maria Admin"
+          description: Nombre del usuario responsable (si está asignado)
+          example: "Maria Admin"
         fechaLimite:
           type: string
           format: date-time
           nullable: true
-          example: "2026-03-10T23:59:00Z"
+          description: Fecha límite (ISO 8601)
+          example: "2026-04-01T23:59:59"
         impacto:
           $ref: '#/components/schemas/ImpactoAcademico'
+          description: Impacto académico
 
     ClasificarDTO:
       type: object
-      required: [tipoSolicitud]
+      required: [tipoSolicitud, impacto, fechaLimite]
       properties:
         tipoSolicitud:
           $ref: '#/components/schemas/TipoSolicitudNombre'
+          description: Tipo de solicitud (requerido)
+        impacto:
+          $ref: '#/components/schemas/ImpactoAcademico'
+          description: Impacto académico actualizado (requerido)
+        fechaLimite:
+          type: string
+          format: date-time
+          description: Fecha límite actualizada (requerida)
+          example: "2026-04-15T23:59:59"
+        observacion:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Observación sobre la clasificación
+          example: "Reclasificación por análisis actualizado"
 
     AsignarDTO:
       type: object
@@ -746,6 +807,7 @@ components:
         responsableId:
           type: integer
           format: int64
+          description: ID del usuario responsable a asignar
           example: 2
 
     CambiarEstadoDTO:
@@ -754,11 +816,13 @@ components:
       properties:
         nuevoEstado:
           $ref: '#/components/schemas/EstadoSolicitud'
+          description: Nuevo estado de la solicitud
         observacion:
           type: string
-          maxLength: 1000
           nullable: true
-          example: "Cambio de estado por gestión administrativa"
+          maxLength: 1000
+          description: Observación sobre el cambio de estado
+          example: "Cambio en proceso de gestión administrativa"
 
     CerrarDTO:
       type: object
@@ -766,8 +830,8 @@ components:
       properties:
         observacion:
           type: string
-          minLength: 1
           maxLength: 2000
+          description: Observación de cierre (obligatoria y no puede estar vacía)
           example: "Caso resuelto y comunicado al solicitante"
 
     HistorialEntryDTO:
@@ -777,22 +841,29 @@ components:
         fechaHora:
           type: string
           format: date-time
-          example: "2026-03-01T10:30:00Z"
+          description: Fecha y hora del evento (ISO 8601)
+          example: "2026-03-01T10:30:00"
         accion:
           $ref: '#/components/schemas/AccionHistorial'
+          description: Tipo de acción registrada
         observacion:
           type: string
           nullable: true
+          description: Observación adicional del evento
           example: "Registro inicial"
         estadoAnterior:
           allOf:
             - $ref: '#/components/schemas/EstadoSolicitud'
           nullable: true
+          description: Estado anterior (null si es primera acción)
         estadoNuevo:
           $ref: '#/components/schemas/EstadoSolicitud'
+          description: Estado nuevo
         actorId:
           type: integer
           format: int64
+          nullable: true
+          description: ID del usuario que realizó la acción (null si es acción del sistema)
           example: 2
 
     EstadoSolicitud:
@@ -803,6 +874,9 @@ components:
         - EN_ATENCION
         - ATENDIDA
         - CERRADA
+      description: |
+        Estados del ciclo de vida de solicitud.
+        Transiciones válidas: REGISTRADA → CLASIFICADA → EN_ATENCION → ATENDIDA → CERRADA
 
     Prioridad:
       type: string
@@ -811,6 +885,7 @@ components:
         - MEDIA
         - ALTA
         - CRITICA
+      description: Nivel de prioridad calculado automáticamente
 
     CanalOrigen:
       type: string
@@ -820,6 +895,7 @@ components:
         - SAC
         - TELEFONICO
         - PRESENCIAL
+      description: Canal por el cual ingresó la solicitud
 
     ImpactoAcademico:
       type: string
@@ -828,6 +904,7 @@ components:
         - MEDIO
         - ALTO
         - CRITICO
+      description: Nivel de impacto académico de la solicitud
 
     RolNombre:
       type: string
@@ -835,6 +912,7 @@ components:
         - ESTUDIANTE
         - ADMINISTRATIVO
         - COORDINADOR
+      description: Rol del usuario en el sistema
 
     TipoSolicitudNombre:
       type: string
@@ -845,6 +923,7 @@ components:
         - REGISTRO_ASIGNATURA
         - CONSULTA_ACADEMICA
         - OTRO
+      description: Tipo de solicitud académica
 
     AccionHistorial:
       type: string
@@ -856,6 +935,7 @@ components:
         - CAMBIO_ESTADO
         - CIERRE
         - OBSERVACION
+      description: Tipo de acción registrada en el historial
 
     ErrorResponse:
       type: object
@@ -863,59 +943,51 @@ components:
         timestamp:
           type: string
           format: date-time
-          example: "2026-03-01T12:00:00Z"
+          description: Fecha y hora del error (ISO 8601)
+          example: "2026-03-01T12:00:00"
         status:
           type: integer
+          description: Código HTTP de estado
           example: 409
         error:
           type: string
+          description: Nombre del error
           example: "Conflicto"
         message:
           type: string
-          example: "Transición inválida de REGISTRADA a EN_ATENCION"
+          description: Mensaje descriptivo del error
+          example: "No se puede asignar responsable a una solicitud cerrada"
         path:
           type: string
-          example: "/api/v1/solicitudes/1/estado"
+          description: Path del endpoint donde ocurrió el error
+          example: "/api/v1/solicitudes/1/asignar"
 
   responses:
     BadRequest:
-      description: Solicitud Incorrecta - Error de validación/entrada inválida
+      description: Solicitud Incorrecta - Error de validación o entrada inválida
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            timestamp: "2026-03-01T12:00:00Z"
+            timestamp: "2026-03-01T12:00:00"
             status: 400
             error: "Solicitud Incorrecta"
-            message: "Error de validación"
+            message: "Error de validación: descripción es obligatoria"
             path: "/api/v1/solicitudes"
 
     Unauthorized:
-      description: No Autorizado - JWT inválido/faltante o credenciales inválidas
+      description: No Autorizado - Credenciales inválidas
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            timestamp: "2026-03-01T12:00:00Z"
+            timestamp: "2026-03-01T12:00:00"
             status: 401
             error: "No Autorizado"
-            message: "Se requiere autenticación completa"
-            path: "/api/v1/solicitudes"
-
-    Forbidden:
-      description: Prohibido - Permisos de rol insuficientes
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            timestamp: "2026-03-01T12:00:00Z"
-            status: 403
-            error: "Prohibido"
-            message: "Acceso denegado"
-            path: "/api/v1/solicitudes"
+            message: "Email o contraseña incorrectos"
+            path: "/api/v1/auth/login"
 
     NotFound:
       description: No Encontrado - El recurso no existe
@@ -924,24 +996,29 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            timestamp: "2026-03-01T12:00:00Z"
+            timestamp: "2026-03-01T12:00:00"
             status: 404
             error: "No Encontrado"
-            message: "Recurso no encontrado"
+            message: "Solicitud no encontrada"
             path: "/api/v1/solicitudes/999"
 
     Conflict:
-      description: Conflicto - Violación de regla de negocio (transición inválida, responsable inactivo, ya cerrado, etc.)
+      description: |
+        Conflicto - Violación de regla de negocio:
+        - Transición de estado inválida
+        - Responsable inactivo
+        - Solicitud ya cerrada
+        - Campos requeridos faltantes para clasificación
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            timestamp: "2026-03-01T12:00:00Z"
+            timestamp: "2026-03-01T12:00:00"
             status: 409
             error: "Conflicto"
-            message: "El usuario responsable está inactivo"
-            path: "/api/v1/solicitudes/1/asignar"
+            message: "Transición inválida de CLASIFICADA a ATENDIDA"
+            path: "/api/v1/solicitudes/1/estado"
 
     InternalServerError:
       description: Error Interno del Servidor - Fallo inesperado
@@ -950,7 +1027,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            timestamp: "2026-03-01T12:00:00Z"
+            timestamp: "2026-03-01T12:00:00"
             status: 500
             error: "Error Interno del Servidor"
             message: "Error inesperado"
