@@ -2,10 +2,13 @@ package com.triage.backend.web.controller;
 
 import com.triage.backend.service.ISolicitudService;
 import com.triage.backend.web.dto.*;
+import com.triage.backend.domain.enums.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @RestController
@@ -35,9 +38,64 @@ public class SolicitudController {
             @RequestParam(value = "desde", required = false) String desde,
             @RequestParam(value = "hasta", required = false) String hasta) {
         
-        // Convertir strings a enums (simplificado, se puede mejorar)
+        // Convertir strings a enums (null-safe)
+        EstadoSolicitud estadoEnum = null;
+        if (estado != null && !estado.isEmpty()) {
+            try {
+                estadoEnum = EstadoSolicitud.valueOf(estado.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Si no es válido, se deja como null
+            }
+        }
+        
+        Prioridad prioridadEnum = null;
+        if (prioridad != null && !prioridad.isEmpty()) {
+            try {
+                prioridadEnum = Prioridad.valueOf(prioridad.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Si no es válido, se deja como null
+            }
+        }
+        
+        TipoSolicitudNombre tipoEnum = null;
+        if (tipoSolicitud != null && !tipoSolicitud.isEmpty()) {
+            try {
+                tipoEnum = TipoSolicitudNombre.valueOf(tipoSolicitud.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Si no es válido, se deja como null
+            }
+        }
+        
+        CanalOrigen canalEnum = null;
+        if (canalOrigen != null && !canalOrigen.isEmpty()) {
+            try {
+                canalEnum = CanalOrigen.valueOf(canalOrigen.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Si no es válido, se deja como null
+            }
+        }
+        
+        // Convertir strings a LocalDateTime (formatos comunes)
+        LocalDateTime desdeDateTime = null;
+        if (desde != null && !desde.isEmpty()) {
+            try {
+                desdeDateTime = LocalDateTime.parse(desde, DateTimeFormatter.ISO_DATE_TIME);
+            } catch (Exception e) {
+                // Si no se puede parsear, se deja como null
+            }
+        }
+        
+        LocalDateTime hastaDateTime = null;
+        if (hasta != null && !hasta.isEmpty()) {
+            try {
+                hastaDateTime = LocalDateTime.parse(hasta, DateTimeFormatter.ISO_DATE_TIME);
+            } catch (Exception e) {
+                // Si no se puede parsear, se deja como null
+            }
+        }
+        
         SolicitudFilterDTO filtros = new SolicitudFilterDTO(
-            null, null, null, null, responsableId, null, null
+            estadoEnum, prioridadEnum, tipoEnum, canalEnum, responsableId, desdeDateTime, hastaDateTime
         );
         
         return ResponseEntity.ok(solicitudService.listar(filtros));

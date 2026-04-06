@@ -189,6 +189,14 @@ public class SolicitudServiceImpl implements ISolicitudService {
         if (solicitud.getEstadoActual() == EstadoSolicitud.CERRADA) {
             throw new BusinessRuleException("La solicitud ya está cerrada");
         }
+
+        if (solicitud.getEstadoActual() != EstadoSolicitud.ATENDIDA) {
+            throw new BusinessRuleException("Solo se pueden cerrar solicitudes en estado ATENDIDA");
+        }
+        
+        if (dto.observacion() == null || dto.observacion().trim().isEmpty()) {
+            throw new BusinessRuleException("La observación de cierre es obligatoria");
+        }
         
         EstadoSolicitud estadoAnterior = solicitud.getEstadoActual();
         solicitud.setEstadoActual(EstadoSolicitud.CERRADA);
