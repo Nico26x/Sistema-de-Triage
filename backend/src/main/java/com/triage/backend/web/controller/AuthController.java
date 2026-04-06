@@ -2,7 +2,6 @@ package com.triage.backend.web.controller;
 
 import com.triage.backend.domain.entity.Usuario;
 import com.triage.backend.service.IAuthService;
-import com.triage.backend.service.IUsuarioService;
 import com.triage.backend.web.dto.AuthRequestDTO;
 import com.triage.backend.web.dto.AuthResponseDTO;
 import com.triage.backend.web.dto.RegisterRequestDTO;
@@ -17,11 +16,9 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     
     private final IAuthService authService;
-    private final IUsuarioService usuarioService;
     
-    public AuthController(IAuthService authService, IUsuarioService usuarioService) {
+    public AuthController(IAuthService authService) {
         this.authService = authService;
-        this.usuarioService = usuarioService;
     }
     
     @PostMapping("/register")

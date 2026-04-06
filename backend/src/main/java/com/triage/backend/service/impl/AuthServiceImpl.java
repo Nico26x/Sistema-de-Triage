@@ -2,7 +2,6 @@ package com.triage.backend.service.impl;
 
 import com.triage.backend.service.IAuthService;
 import com.triage.backend.domain.entity.Usuario;
-import com.triage.backend.domain.enums.RolNombre;
 import com.triage.backend.exception.BusinessRuleException;
 import com.triage.backend.exception.NotFoundException;
 import com.triage.backend.repository.UsuarioRepository;

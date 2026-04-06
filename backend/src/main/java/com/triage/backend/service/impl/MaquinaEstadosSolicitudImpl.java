@@ -1,7 +1,6 @@
 package com.triage.backend.service.impl;
 
 import com.triage.backend.service.IMaquinaEstadosSolicitud;
-import com.triage.backend.service.IMaquinaEstadosSolicitud;
 import com.triage.backend.domain.enums.EstadoSolicitud;
 import com.triage.backend.exception.BusinessRuleException;
 import org.springframework.stereotype.Service;

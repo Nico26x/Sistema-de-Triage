@@ -218,7 +218,7 @@ public class SolicitudServiceImpl implements ISolicitudService {
     
     @Override
     public List<HistorialEntryDTO> obtenerHistorial(Long id) {
-        Solicitud solicitud = solicitudRepository.findById(id)
+        solicitudRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Solicitud no encontrada"));
         
         return historialService.listarPorSolicitud(id);
