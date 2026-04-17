@@ -13,6 +13,11 @@ import com.triage.backend.service.IPriorizacionService;
 import com.triage.backend.web.dto.SolicitudCreateDTO;
 import com.triage.backend.web.dto.SolicitudResponseDTO;
 import com.triage.backend.web.dto.ClasificarDTO;
+import com.triage.backend.web.dto.AsignarDTO;
+import com.triage.backend.web.dto.CambiarEstadoDTO;
+import com.triage.backend.web.dto.CerrarDTO;
+import com.triage.backend.web.dto.SolicitudFilterDTO;
+import com.triage.backend.web.dto.HistorialEntryDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -31,7 +39,7 @@ import static org.mockito.Mockito.*;
 /**
  * Pruebas unitarias para {@link SolicitudServiceImpl}.
  * 
- * Cubre métodos `crear(...)` y `detalle(...)` sin usar base de datos,
+ * Cubre métodos `crear(...)`, `detalle(...)` y `clasificar(...)` sin usar base de datos,
  * Spring completo ni mocks innecesarios. Usa Mockito para todas las dependencias.
  */
 @ExtendWith(MockitoExtension.class)
@@ -553,6 +561,10 @@ class SolicitudServiceImplTest {
         assertEquals("Solo se pueden clasificar solicitudes en estado REGISTRADA", exception.getMessage());
         verify(solicitudRepository, times(1)).findById(solicitudId);
         verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verify(priorizacionService, never()).calcularPrioridad(any(), any(), any());
+        verify(priorizacionService, never()).generarJustificacionPrioridad(any(), any(), any());
+        verify(maquinaEstados, never()).validarTransicion(any(), any());
     }
 
     @Test
@@ -580,6 +592,10 @@ class SolicitudServiceImplTest {
         assertEquals("El tipo de solicitud es requerido", exception.getMessage());
         verify(solicitudRepository, times(1)).findById(solicitudId);
         verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verify(priorizacionService, never()).calcularPrioridad(any(), any(), any());
+        verify(priorizacionService, never()).generarJustificacionPrioridad(any(), any(), any());
+        verify(maquinaEstados, never()).validarTransicion(any(), any());
     }
 
     @Test
@@ -607,6 +623,10 @@ class SolicitudServiceImplTest {
         assertEquals("El impacto es requerido", exception.getMessage());
         verify(solicitudRepository, times(1)).findById(solicitudId);
         verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verify(priorizacionService, never()).calcularPrioridad(any(), any(), any());
+        verify(priorizacionService, never()).generarJustificacionPrioridad(any(), any(), any());
+        verify(maquinaEstados, never()).validarTransicion(any(), any());
     }
 
     @Test
@@ -635,6 +655,10 @@ class SolicitudServiceImplTest {
         assertEquals("La fecha límite es requerida", exception.getMessage());
         verify(solicitudRepository, times(1)).findById(solicitudId);
         verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verify(priorizacionService, never()).calcularPrioridad(any(), any(), any());
+        verify(priorizacionService, never()).generarJustificacionPrioridad(any(), any(), any());
+        verify(maquinaEstados, never()).validarTransicion(any(), any());
     }
 
     @Test
@@ -743,6 +767,43 @@ class SolicitudServiceImplTest {
     }
 
     @Test
+    @DisplayName("clasificar: debe propagar BusinessRuleException de validarTransicion")
+    void testClasificarPropagaExcepcionValidarTransicion() {
+        Long solicitudId = 1L;
+        TipoSolicitudNombre tipo = TipoSolicitudNombre.HOMOLOGACION;
+        ImpactoAcademico impacto = ImpactoAcademico.ALTO;
+        LocalDateTime fechaLimite = LocalDateTime.now().plusDays(5);
+
+        Usuario solicitante = Usuario.builder().id(1L).nombre("Test").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Test").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.REGISTRADA).solicitante(solicitante).build();
+
+        ClasificarDTO dto = new ClasificarDTO(tipo, impacto, fechaLimite, "Obs");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(priorizacionService.calcularPrioridad(impacto, fechaLimite, tipo))
+            .thenReturn(Prioridad.ALTA);
+        when(priorizacionService.generarJustificacionPrioridad(impacto, fechaLimite, tipo))
+            .thenReturn("Justif");
+        
+        // Simular que la transición es inválida
+        doThrow(new BusinessRuleException("Transición de estado no permitida"))
+            .when(maquinaEstados)
+            .validarTransicion(EstadoSolicitud.REGISTRADA, EstadoSolicitud.CLASIFICADA);
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.clasificar(solicitudId, dto));
+
+        assertEquals("Transición de estado no permitida", exception.getMessage());
+        
+        // Verificar que NO se guardó ni se registró historial
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("clasificar: debe cambiar estado a CLASIFICADA usando ArgumentCaptor")
     void testClasificarCambiaEstadoAClasificada() {
         Long solicitudId = 1L;
@@ -760,7 +821,8 @@ class SolicitudServiceImplTest {
             .id(solicitudId).descripcion("Test").canalOrigen(CanalOrigen.CSU)
             .estadoActual(EstadoSolicitud.CLASIFICADA).tipoSolicitud(tipo)
             .impacto(impacto).fechaLimite(fechaLimite).solicitante(solicitante)
-            .prioridad(Prioridad.ALTA).build();
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justif")
+            .build();
 
         ClasificarDTO dto = new ClasificarDTO(tipo, impacto, fechaLimite, "Obs");
 
@@ -783,6 +845,7 @@ class SolicitudServiceImplTest {
         assertEquals(impacto, solicitudGuardadaCapturada.getImpacto());
         assertEquals(fechaLimite, solicitudGuardadaCapturada.getFechaLimite());
         assertEquals(Prioridad.ALTA, solicitudGuardadaCapturada.getPrioridad());
+        assertEquals("Justif", solicitudGuardadaCapturada.getJustificacionPrioridad());
     }
 
     @Test
@@ -883,5 +946,1296 @@ class SolicitudServiceImplTest {
             () -> assertEquals(fechaLimite, resultado.fechaLimite()),
             () -> assertEquals(impacto, resultado.impacto())
         );
+    }
+
+    // ============================================================================
+    // PRUEBAS: asignarResponsable(...)
+    // ============================================================================
+
+    @Test
+    @DisplayName("asignarResponsable: debe asignar responsable correctamente cuando todos los datos son válidos")
+    void testAsignarResponsableExitosa() {
+        Long solicitudId = 1L;
+        Long responsableId = 5L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(responsableId).nombre("Ana Martínez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud a asignar").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).fechaLimite(LocalDateTime.now().plusDays(5))
+            .solicitante(solicitante).fechaRegistro(LocalDateTime.now())
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justificación")
+            .responsable(null).build();
+
+        Solicitud solicitudAsignada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud a asignar").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).fechaLimite(LocalDateTime.now().plusDays(5))
+            .solicitante(solicitante).fechaRegistro(LocalDateTime.now())
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justificación")
+            .responsable(responsable).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.of(responsable));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudAsignada);
+
+        SolicitudResponseDTO resultado = solicitudService.asignarResponsable(solicitudId, dto);
+
+        assertNotNull(resultado);
+        assertEquals(solicitudId, resultado.id());
+        assertEquals("Ana Martínez", resultado.responsable());
+        assertEquals(EstadoSolicitud.CLASIFICADA, resultado.estado());
+
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(usuarioRepository, times(1)).findById(responsableId);
+        verify(solicitudRepository, times(1)).save(any(Solicitud.class));
+        verify(historialService, times(1)).registrarEvento(
+            eq(solicitudAsignada), eq(responsable), eq(AccionHistorial.ASIGNACION),
+            eq("Asignado a: Ana Martínez"), eq(EstadoSolicitud.CLASIFICADA), eq(EstadoSolicitud.CLASIFICADA)
+        );
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe lanzar NotFoundException cuando la solicitud no existe")
+    void testAsignarResponsableSolicitudNoExiste() {
+        Long solicitudId = 999L;
+        Long responsableId = 5L;
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.empty());
+
+        NotFoundException exception = assertThrows(NotFoundException.class,
+            () -> solicitudService.asignarResponsable(solicitudId, dto));
+
+        assertEquals("Solicitud no encontrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(usuarioRepository, never()).findById(any());
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe lanzar NotFoundException cuando el responsable no existe")
+    void testAsignarResponsableResponsableNoExiste() {
+        Long solicitudId = 1L;
+        Long responsableId = 999L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.empty());
+
+        NotFoundException exception = assertThrows(NotFoundException.class,
+            () -> solicitudService.asignarResponsable(solicitudId, dto));
+
+        assertEquals("Responsable no encontrado", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(usuarioRepository, times(1)).findById(responsableId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe lanzar BusinessRuleException cuando el responsable está inactivo")
+    void testAsignarResponsableResponsableInactivo() {
+        Long solicitudId = 1L;
+        Long responsableId = 5L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Usuario responsableInactivo = Usuario.builder()
+            .id(responsableId).nombre("Ana Martínez").activo(false).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.of(responsableInactivo));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.asignarResponsable(solicitudId, dto));
+
+        assertEquals("El responsable debe estar activo", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(usuarioRepository, times(1)).findById(responsableId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe lanzar BusinessRuleException cuando la solicitud está cerrada")
+    void testAsignarResponsableSolicitudCerrada() {
+        Long solicitudId = 1L;
+        Long responsableId = 5L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud cerrada").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CERRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudCerrada));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.asignarResponsable(solicitudId, dto));
+
+        assertEquals("No se puede asignar responsable a una solicitud cerrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(usuarioRepository, never()).findById(any());
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe guardar la solicitud actualizada en el repositorio")
+    void testAsignarResponsableGuardaSolicitud() {
+        Long solicitudId = 1L;
+        Long responsableId = 5L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(responsableId).nombre("Ana Martínez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.EN_ATENCION).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudGuardada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.EN_ATENCION).solicitante(solicitante)
+            .responsable(responsable).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.of(responsable));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudGuardada);
+
+        solicitudService.asignarResponsable(solicitudId, dto);
+
+        verify(solicitudRepository, times(1)).save(any(Solicitud.class));
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe registrar evento de asignación en historial")
+    void testAsignarResponsableRegistraEvento() {
+        Long solicitudId = 2L;
+        Long responsableId = 6L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(2L).nombre("María García").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(responsableId).nombre("Carlos López").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CORREO)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudAsignada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CORREO)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).solicitante(solicitante)
+            .responsable(responsable).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.of(responsable));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudAsignada);
+
+        solicitudService.asignarResponsable(solicitudId, dto);
+
+        verify(historialService, times(1)).registrarEvento(
+            eq(solicitudAsignada), eq(responsable), eq(AccionHistorial.ASIGNACION),
+            eq("Asignado a: Carlos López"), eq(EstadoSolicitud.CLASIFICADA), eq(EstadoSolicitud.CLASIFICADA)
+        );
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe devolver DTO mapeado correctamente")
+    void testAsignarResponsableDevuelveDTOCorrectamente() {
+        Long solicitudId = 3L;
+        Long responsableId = 7L;
+        LocalDateTime fechaRegistro = LocalDateTime.now().minusDays(1);
+        LocalDateTime fechaLimite = LocalDateTime.now().plusDays(10);
+
+        Usuario solicitante = Usuario.builder()
+            .id(3L).nombre("Pedro Rodríguez").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(responsableId).nombre("Diana Flores").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Cambio de horario")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(EstadoSolicitud.EN_ATENCION)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.MEDIO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.MEDIA).justificacionPrioridad("Justificación")
+            .responsable(null).build();
+
+        Solicitud solicitudAsignada = Solicitud.builder()
+            .id(solicitudId).descripcion("Cambio de horario")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(EstadoSolicitud.EN_ATENCION)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.MEDIO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.MEDIA).justificacionPrioridad("Justificación")
+            .responsable(responsable).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.of(responsable));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudAsignada);
+
+        SolicitudResponseDTO resultado = solicitudService.asignarResponsable(solicitudId, dto);
+
+        assertAll(
+            () -> assertEquals(solicitudId, resultado.id()),
+            () -> assertEquals("Cambio de horario", resultado.descripcion()),
+            () -> assertEquals(fechaRegistro, resultado.fechaRegistro()),
+            () -> assertEquals(EstadoSolicitud.EN_ATENCION, resultado.estado()),
+            () -> assertEquals(Prioridad.MEDIA, resultado.prioridad()),
+            () -> assertEquals("Justificación", resultado.justificacionPrioridad()),
+            () -> assertEquals(CanalOrigen.PRESENCIAL, resultado.canalOrigen()),
+            () -> assertEquals(TipoSolicitudNombre.CANCELACION_ASIGNATURA, resultado.tipoSolicitud()),
+            () -> assertEquals("Pedro Rodríguez", resultado.solicitante()),
+            () -> assertEquals("Diana Flores", resultado.responsable()),
+            () -> assertEquals(fechaLimite, resultado.fechaLimite()),
+            () -> assertEquals(ImpactoAcademico.MEDIO, resultado.impacto())
+        );
+    }
+
+    @Test
+    @DisplayName("asignarResponsable: debe asignar responsable correctamente usando ArgumentCaptor")
+    void testAsignarResponsableUsaArgumentCaptor() {
+        Long solicitudId = 4L;
+        Long responsableId = 8L;
+
+        Usuario solicitante = Usuario.builder()
+            .id(4L).nombre("Laura Gómez").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(responsableId).nombre("Roberto Torres").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud test").canalOrigen(CanalOrigen.SAC)
+            .estadoActual(EstadoSolicitud.REGISTRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudAsignada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud test").canalOrigen(CanalOrigen.SAC)
+            .estadoActual(EstadoSolicitud.REGISTRADA).solicitante(solicitante)
+            .responsable(responsable).build();
+
+        AsignarDTO dto = new AsignarDTO(responsableId);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(usuarioRepository.findById(responsableId)).thenReturn(Optional.of(responsable));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudAsignada);
+
+        ArgumentCaptor<Solicitud> captor = ArgumentCaptor.forClass(Solicitud.class);
+
+        solicitudService.asignarResponsable(solicitudId, dto);
+
+        verify(solicitudRepository).save(captor.capture());
+        Solicitud solicitudGuardadaCapturada = captor.getValue();
+
+        assertEquals(responsable, solicitudGuardadaCapturada.getResponsable());
+        assertEquals("Roberto Torres", solicitudGuardadaCapturada.getResponsable().getNombre());
+    }
+
+    // ============================================================================
+    // PRUEBAS: cambiarEstado(...)
+    // ============================================================================
+
+    @Test
+    @DisplayName("cambiarEstado: debe cambiar correctamente el estado cuando la transición es válida")
+    void testCambiarEstadoExitosa() {
+        Long solicitudId = 1L;
+        EstadoSolicitud estadoActual = EstadoSolicitud.CLASIFICADA;
+        EstadoSolicitud nuevoEstado = EstadoSolicitud.EN_ATENCION;
+        String observacion = "Cambiando a en atención";
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud para cambiar estado").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(estadoActual).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).fechaLimite(LocalDateTime.now().plusDays(5))
+            .solicitante(solicitante).fechaRegistro(LocalDateTime.now())
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justificación")
+            .responsable(null).build();
+
+        Solicitud solicitudCambiada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud para cambiar estado").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(nuevoEstado).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).fechaLimite(LocalDateTime.now().plusDays(5))
+            .solicitante(solicitante).fechaRegistro(LocalDateTime.now())
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justificación")
+            .responsable(null).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(nuevoEstado, observacion);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCambiada);
+
+        SolicitudResponseDTO resultado = solicitudService.cambiarEstado(solicitudId, dto);
+
+        assertNotNull(resultado);
+        assertEquals(solicitudId, resultado.id());
+        assertEquals(nuevoEstado, resultado.estado());
+
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(maquinaEstados, times(1)).validarTransicion(estadoActual, nuevoEstado);
+        verify(solicitudRepository, times(1)).save(any(Solicitud.class));
+        verify(historialService, times(1)).registrarEvento(
+            eq(solicitudCambiada), isNull(), eq(AccionHistorial.CAMBIO_ESTADO),
+            eq(observacion), eq(estadoActual), eq(nuevoEstado)
+        );
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(usuarioRepository);
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe lanzar NotFoundException cuando la solicitud no existe")
+    void testCambiarEstadoSolicitudNoExiste() {
+        Long solicitudId = 999L;
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(EstadoSolicitud.EN_ATENCION, "Observación");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.empty());
+
+        NotFoundException exception = assertThrows(NotFoundException.class,
+            () -> solicitudService.cambiarEstado(solicitudId, dto));
+
+        assertEquals("Solicitud no encontrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(maquinaEstados, never()).validarTransicion(any(), any());
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe lanzar BusinessRuleException cuando la solicitud está cerrada")
+    void testCambiarEstadoSolicitudCerrada() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud cerrada").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CERRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(EstadoSolicitud.ATENDIDA, "Intento de cambio");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudCerrada));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cambiarEstado(solicitudId, dto));
+
+        assertEquals("No se puede cambiar el estado de una solicitud cerrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(maquinaEstados, never()).validarTransicion(any(), any());
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe propagar BusinessRuleException de validarTransicion")
+    void testCambiarEstadoPropagaExcepcionValidarTransicion() {
+        Long solicitudId = 1L;
+        EstadoSolicitud estadoActual = EstadoSolicitud.REGISTRADA;
+        EstadoSolicitud nuevoEstado = EstadoSolicitud.ATENDIDA;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Test").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(estadoActual).solicitante(solicitante).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(nuevoEstado, "Observación");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        doThrow(new BusinessRuleException("Transición inválida de REGISTRADA a ATENDIDA"))
+            .when(maquinaEstados)
+            .validarTransicion(estadoActual, nuevoEstado);
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cambiarEstado(solicitudId, dto));
+
+        assertEquals("Transición inválida de REGISTRADA a ATENDIDA", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(maquinaEstados, times(1)).validarTransicion(estadoActual, nuevoEstado);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe guardar la solicitud actualizada en el repositorio")
+    void testCambiarEstadoGuardaSolicitud() {
+        Long solicitudId = 1L;
+        EstadoSolicitud estadoActual = EstadoSolicitud.EN_ATENCION;
+        EstadoSolicitud nuevoEstado = EstadoSolicitud.ATENDIDA;
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(estadoActual).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudGuardada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(nuevoEstado).solicitante(solicitante)
+            .responsable(null).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(nuevoEstado, "Cambio de estado");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudGuardada);
+
+        solicitudService.cambiarEstado(solicitudId, dto);
+
+        verify(solicitudRepository, times(1)).save(any(Solicitud.class));
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe registrar evento de cambio de estado en historial")
+    void testCambiarEstadoRegistraEvento() {
+        Long solicitudId = 2L;
+        EstadoSolicitud estadoAnterior = EstadoSolicitud.CLASIFICADA;
+        EstadoSolicitud nuevoEstado = EstadoSolicitud.EN_ATENCION;
+        String observacion = "Pasando a en atención";
+
+        Usuario solicitante = Usuario.builder()
+            .id(2L).nombre("María García").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CORREO)
+            .estadoActual(estadoAnterior).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudCambiada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CORREO)
+            .estadoActual(nuevoEstado).solicitante(solicitante)
+            .responsable(null).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(nuevoEstado, observacion);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCambiada);
+
+        solicitudService.cambiarEstado(solicitudId, dto);
+
+        verify(historialService, times(1)).registrarEvento(
+            eq(solicitudCambiada), isNull(), eq(AccionHistorial.CAMBIO_ESTADO),
+            eq(observacion), eq(estadoAnterior), eq(nuevoEstado)
+        );
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe devolver DTO mapeado correctamente")
+    void testCambiarEstadoDevuelveDTOCorrectamente() {
+        Long solicitudId = 3L;
+        EstadoSolicitud estadoAnterior = EstadoSolicitud.EN_ATENCION;
+        EstadoSolicitud nuevoEstado = EstadoSolicitud.ATENDIDA;
+        LocalDateTime fechaRegistro = LocalDateTime.now().minusDays(1);
+        LocalDateTime fechaLimite = LocalDateTime.now().plusDays(5);
+
+        Usuario solicitante = Usuario.builder()
+            .id(3L).nombre("Pedro Rodríguez").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(4L).nombre("Laura Gómez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud a atender")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(estadoAnterior)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.MEDIO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.MEDIA).justificacionPrioridad("Justificación")
+            .responsable(responsable).build();
+
+        Solicitud solicitudCambiada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud a atender")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(nuevoEstado)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.MEDIO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.MEDIA).justificacionPrioridad("Justificación")
+            .responsable(responsable).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(nuevoEstado, "Solicitud atendida");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCambiada);
+
+        SolicitudResponseDTO resultado = solicitudService.cambiarEstado(solicitudId, dto);
+
+        assertAll(
+            () -> assertEquals(solicitudId, resultado.id()),
+            () -> assertEquals("Solicitud a atender", resultado.descripcion()),
+            () -> assertEquals(fechaRegistro, resultado.fechaRegistro()),
+            () -> assertEquals(nuevoEstado, resultado.estado()),
+            () -> assertEquals(Prioridad.MEDIA, resultado.prioridad()),
+            () -> assertEquals("Justificación", resultado.justificacionPrioridad()),
+            () -> assertEquals(CanalOrigen.PRESENCIAL, resultado.canalOrigen()),
+            () -> assertEquals(TipoSolicitudNombre.CANCELACION_ASIGNATURA, resultado.tipoSolicitud()),
+            () -> assertEquals("Pedro Rodríguez", resultado.solicitante()),
+            () -> assertEquals("Laura Gómez", resultado.responsable()),
+            () -> assertEquals(fechaLimite, resultado.fechaLimite()),
+            () -> assertEquals(ImpactoAcademico.MEDIO, resultado.impacto())
+        );
+    }
+
+    @Test
+    @DisplayName("cambiarEstado: debe cambiar estado correctamente usando ArgumentCaptor")
+    void testCambiarEstadoUsaArgumentCaptor() {
+        Long solicitudId = 4L;
+        EstadoSolicitud estadoActual = EstadoSolicitud.CLASIFICADA;
+        EstadoSolicitud nuevoEstado = EstadoSolicitud.EN_ATENCION;
+        String descripcionOriginal = "Solicitud test";
+
+        Usuario solicitante = Usuario.builder()
+            .id(4L).nombre("Carlos López").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion(descripcionOriginal).canalOrigen(CanalOrigen.SAC)
+            .estadoActual(estadoActual).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudCambiada = Solicitud.builder()
+            .id(solicitudId).descripcion(descripcionOriginal).canalOrigen(CanalOrigen.SAC)
+            .estadoActual(nuevoEstado).solicitante(solicitante)
+            .responsable(null).build();
+
+        CambiarEstadoDTO dto = new CambiarEstadoDTO(nuevoEstado, "Cambio de estado test");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCambiada);
+
+        ArgumentCaptor<Solicitud> captor = ArgumentCaptor.forClass(Solicitud.class);
+
+        solicitudService.cambiarEstado(solicitudId, dto);
+
+        verify(solicitudRepository).save(captor.capture());
+        Solicitud solicitudGuardadaCapturada = captor.getValue();
+
+        assertEquals(nuevoEstado, solicitudGuardadaCapturada.getEstadoActual());
+        assertEquals(descripcionOriginal, solicitudGuardadaCapturada.getDescripcion());
+        assertEquals(solicitante, solicitudGuardadaCapturada.getSolicitante());
+    }
+
+    // ============================================================================
+    // PRUEBAS: cerrar(...)
+    // ============================================================================
+
+    @Test
+    @DisplayName("cerrar: debe cerrar correctamente una solicitud cuando está en ATENDIDA")
+    void testCerrarSolicitudExitosa() {
+        Long solicitudId = 1L;
+        String observacion = "Solicitud resuelta satisfactoriamente";
+
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud para cerrar").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.ATENDIDA).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).fechaLimite(LocalDateTime.now().plusDays(5))
+            .solicitante(solicitante).fechaRegistro(LocalDateTime.now())
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justificación")
+            .responsable(null).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud para cerrar").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CERRADA).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).fechaLimite(LocalDateTime.now().plusDays(5))
+            .solicitante(solicitante).fechaRegistro(LocalDateTime.now())
+            .prioridad(Prioridad.ALTA).justificacionPrioridad("Justificación")
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO(observacion);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCerrada);
+
+        SolicitudResponseDTO resultado = solicitudService.cerrar(solicitudId, dto);
+
+        assertNotNull(resultado);
+        assertEquals(solicitudId, resultado.id());
+        assertEquals(EstadoSolicitud.CERRADA, resultado.estado());
+
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, times(1)).save(any(Solicitud.class));
+        verify(historialService, times(1)).registrarEvento(
+            eq(solicitudCerrada), isNull(), eq(AccionHistorial.CIERRE),
+            eq(observacion), eq(EstadoSolicitud.ATENDIDA), eq(EstadoSolicitud.CERRADA)
+        );
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe lanzar NotFoundException cuando la solicitud no existe")
+    void testCerrarSolicitudNoExiste() {
+        Long solicitudId = 999L;
+        CerrarDTO dto = new CerrarDTO("Cierre de prueba");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.empty());
+
+        NotFoundException exception = assertThrows(NotFoundException.class,
+            () -> solicitudService.cerrar(solicitudId, dto));
+
+        assertEquals("Solicitud no encontrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe lanzar BusinessRuleException cuando la solicitud ya está cerrada")
+    void testCerrarSolicitudYaCerrada() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud cerrada").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CERRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO("Intento de cierre");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudCerrada));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cerrar(solicitudId, dto));
+
+        assertEquals("La solicitud ya está cerrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe lanzar BusinessRuleException cuando la solicitud no está en ATENDIDA")
+    void testCerrarSolicitudNoEnAtendida() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudEnClasificada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CLASIFICADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO("Intento de cierre");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudEnClasificada));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cerrar(solicitudId, dto));
+
+        assertEquals("Solo se pueden cerrar solicitudes en estado ATENDIDA", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe lanzar BusinessRuleException cuando observación es null")
+    void testCerrarObservacionNull() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.ATENDIDA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO(null);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cerrar(solicitudId, dto));
+
+        assertEquals("La observación de cierre es obligatoria", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe lanzar BusinessRuleException cuando observación está vacía")
+    void testCerrarObservacionVacia() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.ATENDIDA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO("");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cerrar(solicitudId, dto));
+
+        assertEquals("La observación de cierre es obligatoria", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe lanzar BusinessRuleException cuando observación contiene solo espacios")
+    void testCerrarObservacionSoloEspacios() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.ATENDIDA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO("   ");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+            () -> solicitudService.cerrar(solicitudId, dto));
+
+        assertEquals("La observación de cierre es obligatoria", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(solicitudRepository, never()).save(any());
+        verify(historialService, never()).registrarEvento(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(maquinaEstados);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+    }
+
+    @Test
+    @DisplayName("cerrar: debe guardar la solicitud actualizada en el repositorio")
+    void testCerrarGuardaSolicitud() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.ATENDIDA).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudGuardada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.CERRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO("Cierre exitoso");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudGuardada);
+
+        solicitudService.cerrar(solicitudId, dto);
+
+        verify(solicitudRepository, times(1)).save(any(Solicitud.class));
+    }
+
+    @Test
+    @DisplayName("cerrar: debe registrar evento de cierre en historial")
+    void testCerrarRegistraEvento() {
+        Long solicitudId = 2L;
+        EstadoSolicitud estadoAnterior = EstadoSolicitud.ATENDIDA;
+        String observacion = "Solicitud atendida correctamente";
+
+        Usuario solicitante = Usuario.builder()
+            .id(2L).nombre("María García").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CORREO)
+            .estadoActual(estadoAnterior).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud").canalOrigen(CanalOrigen.CORREO)
+            .estadoActual(EstadoSolicitud.CERRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO(observacion);
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCerrada);
+
+        solicitudService.cerrar(solicitudId, dto);
+
+        verify(historialService, times(1)).registrarEvento(
+            eq(solicitudCerrada), isNull(), eq(AccionHistorial.CIERRE),
+            eq(observacion), eq(estadoAnterior), eq(EstadoSolicitud.CERRADA)
+        );
+    }
+
+    @Test
+    @DisplayName("cerrar: debe devolver DTO mapeado correctamente")
+    void testCerrarDevuelveDTOCorrectamente() {
+        Long solicitudId = 3L;
+        LocalDateTime fechaRegistro = LocalDateTime.now().minusDays(1);
+        LocalDateTime fechaLimite = LocalDateTime.now().plusDays(5);
+
+        Usuario solicitante = Usuario.builder()
+            .id(3L).nombre("Pedro Rodríguez").activo(true).build();
+
+        Usuario responsable = Usuario.builder()
+            .id(4L).nombre("Laura Gómez").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud para cerrar")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(EstadoSolicitud.ATENDIDA)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.MEDIO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.MEDIA).justificacionPrioridad("Justificación")
+            .responsable(responsable).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud para cerrar")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(EstadoSolicitud.CERRADA)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.MEDIO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.MEDIA).justificacionPrioridad("Justificación")
+            .responsable(responsable).build();
+
+        CerrarDTO dto = new CerrarDTO("Cierre ejecutado");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCerrada);
+
+        SolicitudResponseDTO resultado = solicitudService.cerrar(solicitudId, dto);
+
+        assertAll(
+            () -> assertEquals(solicitudId, resultado.id()),
+            () -> assertEquals("Solicitud para cerrar", resultado.descripcion()),
+            () -> assertEquals(fechaRegistro, resultado.fechaRegistro()),
+            () -> assertEquals(EstadoSolicitud.CERRADA, resultado.estado()),
+            () -> assertEquals(Prioridad.MEDIA, resultado.prioridad()),
+            () -> assertEquals("Justificación", resultado.justificacionPrioridad()),
+            () -> assertEquals(CanalOrigen.PRESENCIAL, resultado.canalOrigen()),
+            () -> assertEquals(TipoSolicitudNombre.CANCELACION_ASIGNATURA, resultado.tipoSolicitud()),
+            () -> assertEquals("Pedro Rodríguez", resultado.solicitante()),
+            () -> assertEquals("Laura Gómez", resultado.responsable()),
+            () -> assertEquals(fechaLimite, resultado.fechaLimite()),
+            () -> assertEquals(ImpactoAcademico.MEDIO, resultado.impacto())
+        );
+    }
+
+    @Test
+    @DisplayName("cerrar: debe cambiar estado a CERRADA correctamente usando ArgumentCaptor")
+    void testCerrarUsaArgumentCaptor() {
+        Long solicitudId = 4L;
+        String descripcionOriginal = "Solicitud test";
+
+        Usuario solicitante = Usuario.builder()
+            .id(4L).nombre("Carlos López").activo(true).build();
+
+        Solicitud solicitudInicial = Solicitud.builder()
+            .id(solicitudId).descripcion(descripcionOriginal).canalOrigen(CanalOrigen.SAC)
+            .estadoActual(EstadoSolicitud.ATENDIDA).solicitante(solicitante)
+            .responsable(null).build();
+
+        Solicitud solicitudCerrada = Solicitud.builder()
+            .id(solicitudId).descripcion(descripcionOriginal).canalOrigen(CanalOrigen.SAC)
+            .estadoActual(EstadoSolicitud.CERRADA).solicitante(solicitante)
+            .responsable(null).build();
+
+        CerrarDTO dto = new CerrarDTO("Cierre de prueba");
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitudInicial));
+        when(solicitudRepository.save(any(Solicitud.class))).thenReturn(solicitudCerrada);
+
+        ArgumentCaptor<Solicitud> captor = ArgumentCaptor.forClass(Solicitud.class);
+
+        solicitudService.cerrar(solicitudId, dto);
+
+        verify(solicitudRepository).save(captor.capture());
+        Solicitud solicitudGuardadaCapturada = captor.getValue();
+
+        assertEquals(EstadoSolicitud.CERRADA, solicitudGuardadaCapturada.getEstadoActual());
+        assertEquals(descripcionOriginal, solicitudGuardadaCapturada.getDescripcion());
+        assertEquals(solicitante, solicitudGuardadaCapturada.getSolicitante());
+    }
+
+    // ============================================================================
+    // PRUEBAS: listar(...)
+    // ============================================================================
+
+    @Test
+    @DisplayName("listar: debe devolver correctamente una lista de SolicitudResponseDTO")
+    void testListarRetornaListaSolicitudes() {
+        EstadoSolicitud estado = EstadoSolicitud.CLASIFICADA;
+        Prioridad prioridad = Prioridad.MEDIA;
+        TipoSolicitudNombre tipo = TipoSolicitudNombre.SOLICITUD_CUPO;
+        CanalOrigen canal = CanalOrigen.CSU;
+        Long responsableId = 2L;
+        LocalDateTime desde = LocalDateTime.now().minusDays(10);
+        LocalDateTime hasta = LocalDateTime.now();
+
+        SolicitudFilterDTO filtro = new SolicitudFilterDTO(estado, prioridad, tipo, canal, responsableId, desde, hasta);
+
+        Usuario solicitante1 = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+        Usuario responsable1 = Usuario.builder()
+            .id(2L).nombre("María García").activo(true).build();
+
+        Solicitud solicitud1 = Solicitud.builder()
+            .id(1L).descripcion("Solicitud 1").canalOrigen(canal)
+            .estadoActual(estado).tipoSolicitud(tipo).impacto(ImpactoAcademico.ALTO)
+            .solicitante(solicitante1).fechaRegistro(desde).prioridad(prioridad)
+            .responsable(responsable1).build();
+
+        Usuario solicitante2 = Usuario.builder()
+            .id(3L).nombre("Carlos López").activo(true).build();
+
+        Solicitud solicitud2 = Solicitud.builder()
+            .id(2L).descripcion("Solicitud 2").canalOrigen(canal)
+            .estadoActual(estado).tipoSolicitud(tipo).impacto(ImpactoAcademico.MEDIO)
+            .solicitante(solicitante2).fechaRegistro(desde.plusDays(2)).prioridad(prioridad)
+            .responsable(responsable1).build();
+
+        List<Solicitud> solicitudes = Arrays.asList(solicitud1, solicitud2);
+
+        when(solicitudRepository.buscarPorFiltros(estado, prioridad, tipo, canal, responsableId, desde, hasta))
+            .thenReturn(solicitudes);
+
+        List<SolicitudResponseDTO> resultado = solicitudService.listar(filtro);
+
+        assertNotNull(resultado);
+        assertEquals(2, resultado.size());
+        assertEquals(1L, resultado.get(0).id());
+        assertEquals("Solicitud 1", resultado.get(0).descripcion());
+        assertEquals(2L, resultado.get(1).id());
+        assertEquals("Solicitud 2", resultado.get(1).descripcion());
+
+        verify(solicitudRepository, times(1)).buscarPorFiltros(estado, prioridad, tipo, canal, responsableId, desde, hasta);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(historialService);
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(maquinaEstados);
+    }
+
+    @Test
+    @DisplayName("listar: debe devolver una lista vacía cuando el repositorio retorna vacío")
+    void testListarRetornaListaVacia() {
+        EstadoSolicitud estado = EstadoSolicitud.ATENDIDA;
+        Prioridad prioridad = null;
+        TipoSolicitudNombre tipo = null;
+        CanalOrigen canal = null;
+        Long responsableId = null;
+        LocalDateTime desde = null;
+        LocalDateTime hasta = null;
+
+        SolicitudFilterDTO filtro = new SolicitudFilterDTO(estado, prioridad, tipo, canal, responsableId, desde, hasta);
+
+        when(solicitudRepository.buscarPorFiltros(estado, prioridad, tipo, canal, responsableId, desde, hasta))
+            .thenReturn(Collections.emptyList());
+
+        List<SolicitudResponseDTO> resultado = solicitudService.listar(filtro);
+
+        assertNotNull(resultado);
+        assertEquals(0, resultado.size());
+
+        verify(solicitudRepository, times(1)).buscarPorFiltros(estado, prioridad, tipo, canal, responsableId, desde, hasta);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(historialService);
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(maquinaEstados);
+    }
+
+    @Test
+    @DisplayName("listar: debe llamar al repositorio pasando correctamente todos los filtros")
+    void testListarPasaFiltrosCorrectamente() {
+        EstadoSolicitud estado = EstadoSolicitud.REGISTRADA;
+        Prioridad prioridad = Prioridad.ALTA;
+        TipoSolicitudNombre tipo = TipoSolicitudNombre.HOMOLOGACION;
+        CanalOrigen canal = CanalOrigen.CORREO;
+        Long responsableId = 5L;
+        LocalDateTime desde = LocalDateTime.now().minusDays(30);
+        LocalDateTime hasta = LocalDateTime.now().plusDays(10);
+
+        SolicitudFilterDTO filtro = new SolicitudFilterDTO(estado, prioridad, tipo, canal, responsableId, desde, hasta);
+
+        when(solicitudRepository.buscarPorFiltros(estado, prioridad, tipo, canal, responsableId, desde, hasta))
+            .thenReturn(Collections.emptyList());
+
+        solicitudService.listar(filtro);
+
+        verify(solicitudRepository, times(1)).buscarPorFiltros(
+            eq(estado), eq(prioridad), eq(tipo), eq(canal), eq(responsableId), eq(desde), eq(hasta)
+        );
+    }
+
+    @Test
+    @DisplayName("listar: debe mapear correctamente los campos de cada solicitud al DTO")
+    void testListarMapeaCamposCorrectamente() {
+        Usuario solicitante = Usuario.builder()
+            .id(10L).nombre("Pedro Rodríguez").activo(true).build();
+        Usuario responsable = Usuario.builder()
+            .id(11L).nombre("Laura Gómez").activo(true).build();
+
+        LocalDateTime fechaRegistro = LocalDateTime.now().minusDays(5);
+        LocalDateTime fechaLimite = LocalDateTime.now().plusDays(15);
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(99L).descripcion("Solicitud para mapeo")
+            .canalOrigen(CanalOrigen.PRESENCIAL).estadoActual(EstadoSolicitud.ATENDIDA)
+            .tipoSolicitud(TipoSolicitudNombre.CANCELACION_ASIGNATURA)
+            .impacto(ImpactoAcademico.BAJO).fechaLimite(fechaLimite)
+            .solicitante(solicitante).fechaRegistro(fechaRegistro)
+            .prioridad(Prioridad.BAJA).justificacionPrioridad("Justificación de prueba")
+            .responsable(responsable).build();
+
+        SolicitudFilterDTO filtro = new SolicitudFilterDTO(null, null, null, null, null, null, null);
+
+        when(solicitudRepository.buscarPorFiltros(null, null, null, null, null, null, null))
+            .thenReturn(Arrays.asList(solicitud));
+
+        List<SolicitudResponseDTO> resultado = solicitudService.listar(filtro);
+
+        assertEquals(1, resultado.size());
+        SolicitudResponseDTO dto = resultado.get(0);
+
+        assertAll(
+            () -> assertEquals(99L, dto.id()),
+            () -> assertEquals("Solicitud para mapeo", dto.descripcion()),
+            () -> assertEquals(fechaRegistro, dto.fechaRegistro()),
+            () -> assertEquals(EstadoSolicitud.ATENDIDA, dto.estado()),
+            () -> assertEquals(Prioridad.BAJA, dto.prioridad()),
+            () -> assertEquals("Justificación de prueba", dto.justificacionPrioridad()),
+            () -> assertEquals(CanalOrigen.PRESENCIAL, dto.canalOrigen()),
+            () -> assertEquals(TipoSolicitudNombre.CANCELACION_ASIGNATURA, dto.tipoSolicitud()),
+            () -> assertEquals("Pedro Rodríguez", dto.solicitante()),
+            () -> assertEquals("Laura Gómez", dto.responsable()),
+            () -> assertEquals(fechaLimite, dto.fechaLimite()),
+            () -> assertEquals(ImpactoAcademico.BAJO, dto.impacto())
+        );
+    }
+
+    @Test
+    @DisplayName("listar: debe no interactuar con mocks que el método no utiliza")
+    void testListarNoInteractuaConMocksNoUtilizados() {
+        SolicitudFilterDTO filtro = new SolicitudFilterDTO(
+            EstadoSolicitud.REGISTRADA, null, null, null, null, null, null
+        );
+
+        when(solicitudRepository.buscarPorFiltros(any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(Collections.emptyList());
+
+        solicitudService.listar(filtro);
+
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(historialService);
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(maquinaEstados);
+    }
+
+    // ============================================================================
+    // PRUEBAS: obtenerHistorial(...)
+    // ============================================================================
+
+    @Test
+    @DisplayName("obtenerHistorial: debe devolver correctamente la lista de historial cuando la solicitud existe")
+    void testObtenerHistorialRetornaListaWhenSolicitudExists() {
+        Long solicitudId = 1L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Juan Pérez").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud de prueba").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.EN_ATENCION).tipoSolicitud(TipoSolicitudNombre.SOLICITUD_CUPO)
+            .impacto(ImpactoAcademico.ALTO).solicitante(solicitante)
+            .fechaRegistro(LocalDateTime.now()).prioridad(Prioridad.ALTA)
+            .build();
+
+        HistorialEntryDTO entrada1 = new HistorialEntryDTO(
+            LocalDateTime.now().minusDays(2), AccionHistorial.REGISTRO,
+            "Solicitud registrada", null, EstadoSolicitud.REGISTRADA, 1L
+        );
+
+        HistorialEntryDTO entrada2 = new HistorialEntryDTO(
+            LocalDateTime.now().minusHours(6), AccionHistorial.CLASIFICACION,
+            "Solicitud clasificada", EstadoSolicitud.REGISTRADA, EstadoSolicitud.CLASIFICADA, null
+        );
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(historialService.listarPorSolicitud(solicitudId))
+            .thenReturn(Arrays.asList(entrada1, entrada2));
+
+        List<HistorialEntryDTO> resultado = solicitudService.obtenerHistorial(solicitudId);
+
+        assertNotNull(resultado);
+        assertEquals(2, resultado.size());
+        assertEquals(AccionHistorial.REGISTRO, resultado.get(0).accion());
+        assertEquals(AccionHistorial.CLASIFICACION, resultado.get(1).accion());
+
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(historialService, times(1)).listarPorSolicitud(solicitudId);
+    }
+
+    @Test
+    @DisplayName("obtenerHistorial: debe lanzar NotFoundException cuando la solicitud no existe")
+    void testObtenerHistorialLanzaNotFoundExceptionWhenSolicitudNoExists() {
+        Long solicitudId = 999L;
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.empty());
+
+        NotFoundException exception = assertThrows(NotFoundException.class,
+            () -> solicitudService.obtenerHistorial(solicitudId));
+
+        assertEquals("Solicitud no encontrada", exception.getMessage());
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(historialService, never()).listarPorSolicitud(any());
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(maquinaEstados);
+    }
+
+    @Test
+    @DisplayName("obtenerHistorial: debe delegar correctamente en historialService usando solicitud encontrada")
+    void testObtenerHistorialDelegatesCorrectlyToHistorialService() {
+        Long solicitudId = 5L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Test User").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Test solicitud").canalOrigen(CanalOrigen.SAC)
+            .estadoActual(EstadoSolicitud.REGISTRADA).solicitante(solicitante)
+            .fechaRegistro(LocalDateTime.now()).build();
+
+        HistorialEntryDTO entrada = new HistorialEntryDTO(
+            LocalDateTime.now(), AccionHistorial.REGISTRO, "Registro", null,
+            EstadoSolicitud.REGISTRADA, 1L
+        );
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(historialService.listarPorSolicitud(solicitudId))
+            .thenReturn(Arrays.asList(entrada));
+
+        solicitudService.obtenerHistorial(solicitudId);
+
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(historialService, times(1)).listarPorSolicitud(eq(solicitudId));
+    }
+
+    @Test
+    @DisplayName("obtenerHistorial: debe devolver una lista vacía cuando historialService retorna vacío")
+    void testObtenerHistorialRetornsEmptyListWhenHistorialServiceReturnsEmpty() {
+        Long solicitudId = 3L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Test User").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Nueva solicitud").canalOrigen(CanalOrigen.PRESENCIAL)
+            .estadoActual(EstadoSolicitud.REGISTRADA).solicitante(solicitante)
+            .fechaRegistro(LocalDateTime.now()).build();
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(historialService.listarPorSolicitud(solicitudId))
+            .thenReturn(Collections.emptyList());
+
+        List<HistorialEntryDTO> resultado = solicitudService.obtenerHistorial(solicitudId);
+
+        assertNotNull(resultado);
+        assertEquals(0, resultado.size());
+
+        verify(solicitudRepository, times(1)).findById(solicitudId);
+        verify(historialService, times(1)).listarPorSolicitud(solicitudId);
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(maquinaEstados);
+    }
+
+    @Test
+    @DisplayName("obtenerHistorial: debe no interactuar con mocks que el método no utiliza")
+    void testObtenerHistorialNoInteractuaConMocksNoUtilizados() {
+        Long solicitudId = 2L;
+        Usuario solicitante = Usuario.builder()
+            .id(1L).nombre("Test User").activo(true).build();
+
+        Solicitud solicitud = Solicitud.builder()
+            .id(solicitudId).descripcion("Solicitud test").canalOrigen(CanalOrigen.CSU)
+            .estadoActual(EstadoSolicitud.REGISTRADA).solicitante(solicitante)
+            .fechaRegistro(LocalDateTime.now()).build();
+
+        when(solicitudRepository.findById(solicitudId)).thenReturn(Optional.of(solicitud));
+        when(historialService.listarPorSolicitud(solicitudId))
+            .thenReturn(Collections.emptyList());
+
+        solicitudService.obtenerHistorial(solicitudId);
+
+        verifyNoInteractions(usuarioRepository);
+        verifyNoInteractions(priorizacionService);
+        verifyNoInteractions(maquinaEstados);
     }
 }
