@@ -1,0 +1,932 @@
+{
+  "info": {
+    "name": "Sistema de Triage - API",
+    "description": "Colección completa de endpoints para el Sistema de Triage de Solicitudes Académicas. Hito 2 con tokens placeholder.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "sistema-triage-api-collection"
+  },
+  "item": [
+    {
+      "name": "🔐 Autenticación",
+      "description": "Endpoints de registro e inicio de sesión",
+      "item": [
+        {
+          "name": "POST Registrarse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Juan Pérez\",\n  \"email\": \"juan.perez@universidad.edu\",\n  \"identificacion\": \"1023456789\",\n  \"password\": \"SecurePassword123!\",\n  \"rol\": \"ESTUDIANTE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Registrar nuevo usuario en el sistema. Las opciones de rol son: ESTUDIANTE, ADMINISTRATIVO, COORDINADOR"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Response tiene estructura UsuarioDTO correcta\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('nombre');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('identificacion');",
+                  "    pm.expect(jsonData).to.have.property('activo');",
+                  "    pm.expect(jsonData).to.have.property('rol');",
+                  "});",
+                  "",
+                  "pm.test(\"Email coincide con el enviado\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.email).to.equal(\"juan.perez@universidad.edu\");",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"userId\", jsonData.id);",
+                  "    pm.environment.set(\"email\", jsonData.email);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Iniciar sesión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juan.perez@universidad.edu\",\n  \"password\": \"SecurePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Autenticarse y obtener token placeholder. En Hito 3 será JWT."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contiene token y tipo\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "    pm.expect(jsonData).to.have.property('tipo');",
+                  "});",
+                  "",
+                  "pm.test(\"Token tiene formato placeholder\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.token).to.include('placeholder-token-');",
+                  "});",
+                  "",
+                  "pm.test(\"Tipo de token es Bearer\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.tipo).to.equal('Bearer');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"token\", jsonData.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "👥 Usuarios",
+      "description": "Endpoints de gestión de usuarios",
+      "item": [
+        {
+          "name": "GET Listar todos los usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "usuarios"
+              ]
+            },
+            "description": "Obtener lista de todos los usuarios del sistema"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response es un array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (pm.response.json().length > 0) {",
+                  "    pm.test(\"Primer usuario tiene estructura UsuarioDTO correcta\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        var usuario = jsonData[0];",
+                  "        pm.expect(usuario).to.have.property('id');",
+                  "        pm.expect(usuario).to.have.property('nombre');",
+                  "        pm.expect(usuario).to.have.property('email');",
+                  "        pm.expect(usuario).to.have.property('identificacion');",
+                  "        pm.expect(usuario).to.have.property('activo');",
+                  "        pm.expect(usuario).to.have.property('rol');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Detalle de usuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/usuarios/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "usuarios",
+                "{{userId}}"
+              ]
+            },
+            "description": "Obtener detalles de un usuario específico por ID"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response tiene estructura UsuarioDTO correcta\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('nombre');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('identificacion');",
+                  "    pm.expect(jsonData).to.have.property('activo');",
+                  "    pm.expect(jsonData).to.have.property('rol');",
+                  "});",
+                  "",
+                  "pm.test(\"ID en response coincide con el solicitado\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id.toString()).to.equal(pm.environment.get('userId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH Activar usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/usuarios/{{userId}}/activar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "usuarios",
+                "{{userId}}",
+                "activar"
+              ]
+            },
+            "description": "Activar un usuario (sin body)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 204 No Content\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "pm.test(\"Response body está vacío\", function () {",
+                  "    pm.expect(pm.response.text()).to.equal('');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH Desactivar usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/usuarios/{{userId}}/desactivar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "usuarios",
+                "{{userId}}",
+                "desactivar"
+              ]
+            },
+            "description": "Desactivar un usuario (sin body)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 204 No Content\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "pm.test(\"Response body está vacío\", function () {",
+                  "    pm.expect(pm.response.text()).to.equal('');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Listar responsables activos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/usuarios/responsables",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "usuarios",
+                "responsables"
+              ]
+            },
+            "description": "Obtener lista de usuarios activos con rol ADMINISTRATIVO o COORDINADOR que pueden ser responsables"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response es un array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (pm.response.json().length > 0) {",
+                  "    pm.test(\"Todos los responsables tienen estructura UsuarioDTO correcta\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        jsonData.forEach(function(usuario) {",
+                  "            pm.expect(usuario).to.have.property('id');",
+                  "            pm.expect(usuario).to.have.property('nombre');",
+                  "            pm.expect(usuario).to.have.property('email');",
+                  "            pm.expect(usuario).to.have.property('activo');",
+                  "            pm.expect(usuario.activo).to.be.true;",
+                  "        });",
+                  "    });",
+                  "    ",
+                  "    if (pm.response.json().length > 0) {",
+                  "        pm.environment.set(\"responsableId\", pm.response.json()[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📋 Solicitudes",
+      "description": "Endpoints de gestión de solicitudes académicas",
+      "item": [
+        {
+          "name": "POST Crear solicitud",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descripcion\": \"Solicito homologación de asignaturas de mi programa anterior\",\n  \"canal\": \"CSU\",\n  \"solicitanteId\": {{userId}},\n  \"impacto\": \"ALTO\",\n  \"fechaLimite\": \"2025-12-31T17:00:00\",\n  \"tipo\": \"HOMOLOGACION\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes"
+              ]
+            },
+            "description": "Crear una nueva solicitud académica. Canales: CSU, CORREO, SAC, TELEFONICO, PRESENCIAL. Tipos: HOMOLOGACION, SOLICITUD_CUPO, CANCELACION_ASIGNATURA, REGISTRO_ASIGNATURA, CONSULTA_ACADEMICA, OTRO. Impactos: BAJO, MEDIO, ALTO, CRITICO."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Response tiene estructura SolicitudResponseDTO correcta\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('descripcion');",
+                  "    pm.expect(jsonData).to.have.property('fechaRegistro');",
+                  "    pm.expect(jsonData).to.have.property('estado');",
+                  "    pm.expect(jsonData).to.have.property('estado').to.equal('REGISTRADA');",
+                  "    pm.expect(jsonData).to.have.property('canalOrigen');",
+                  "    pm.expect(jsonData).to.have.property('tipoSolicitud');",
+                  "    pm.expect(jsonData).to.have.property('solicitante');",
+                  "    pm.expect(jsonData).to.have.property('impacto');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"solicitudId\", jsonData.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Listar solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes?estado=REGISTRADA&prioridad=ALTA&tipoSolicitud=HOMOLOGACION&canalOrigen=CSU&responsableId=&desde=&hasta=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "REGISTRADA",
+                  "disabled": true
+                },
+                {
+                  "key": "prioridad",
+                  "value": "ALTA",
+                  "disabled": true
+                },
+                {
+                  "key": "tipoSolicitud",
+                  "value": "HOMOLOGACION",
+                  "disabled": true
+                },
+                {
+                  "key": "canalOrigen",
+                  "value": "CSU",
+                  "disabled": true
+                },
+                {
+                  "key": "responsableId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "desde",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Listar solicitudes con filtros opcionales. Estados: REGISTRADA, CLASIFICADA, EN_ATENCION, ATENDIDA, CERRADA. Prioridades: BAJA, MEDIA, ALTA, CRITICA. Canales: CSU, CORREO, SAC, TELEFONICO, PRESENCIAL. Tipos: HOMOLOGACION, SOLICITUD_CUPO, CANCELACION_ASIGNATURA, REGISTRO_ASIGNATURA, CONSULTA_ACADEMICA, OTRO."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response es un array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Detalle de solicitud",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes/{{solicitudId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes",
+                "{{solicitudId}}"
+              ]
+            },
+            "description": "Obtener detalles completos de una solicitud específica"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response tiene estructura SolicitudResponseDTO correcta\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('descripcion');",
+                  "    pm.expect(jsonData).to.have.property('fechaRegistro');",
+                  "    pm.expect(jsonData).to.have.property('estado');",
+                  "    pm.expect(jsonData).to.have.property('canalOrigen');",
+                  "    pm.expect(jsonData).to.have.property('tipoSolicitud');",
+                  "    pm.expect(jsonData).to.have.property('impacto');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT Clasificar solicitud",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipoSolicitud\": \"HOMOLOGACION\",\n  \"impacto\": \"ALTO\",\n  \"fechaLimite\": \"2025-12-25T17:00:00\",\n  \"observacion\": \"Clasificada como prioridad alta. Requiere revisión del consejo académico.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes/{{solicitudId}}/clasificar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes",
+                "{{solicitudId}}",
+                "clasificar"
+              ]
+            },
+            "description": "Clasificar una solicitud (transición REGISTRADA → CLASIFICADA). Impactos: BAJO, MEDIO, ALTO, CRITICO. Tipos: HOMOLOGACION, SOLICITUD_CUPO, CANCELACION_ASIGNATURA, REGISTRO_ASIGNATURA, CONSULTA_ACADEMICA, OTRO."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response tiene estructura SolicitudResponseDTO correcta\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('estado').to.equal('CLASIFICADA');",
+                  "});",
+                  "",
+                  "pm.test(\"Tipo de solicitud fue actualizado\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.tipoSolicitud).to.equal('HOMOLOGACION');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT Asignar responsable",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"responsableId\": {{responsableId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes/{{solicitudId}}/asignar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes",
+                "{{solicitudId}}",
+                "asignar"
+              ]
+            },
+            "description": "Asignar un responsable a una solicitud"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response tiene estructura SolicitudResponseDTO correcta\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('responsable');",
+                  "});",
+                  "",
+                  "pm.test(\"Responsable no está vacío\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.responsable).to.not.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT Cambiar estado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nuevoEstado\": \"EN_ATENCION\",\n  \"observacion\": \"Solicitud iniciando proceso de atención. Se realizarán entrevistas iniciales.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes/{{solicitudId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes",
+                "{{solicitudId}}",
+                "estado"
+              ]
+            },
+            "description": "Cambiar el estado de una solicitud. Estados válidos: REGISTRADA, CLASIFICADA, EN_ATENCION, ATENDIDA, CERRADA"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Estado fue actualizado correctamente\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.estado).to.equal('EN_ATENCION');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT Cerrar solicitud",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"observacion\": \"Solicitud completada satisfactoriamente. Se han realizado todas las diligencias y la homologación fue aprobada por el consejo académico.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes/{{solicitudId}}/cerrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes",
+                "{{solicitudId}}",
+                "cerrar"
+              ]
+            },
+            "description": "Cerrar una solicitud (transición ATENDIDA → CERRADA)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Estado fue cambiado a CERRADA\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.estado).to.equal('CERRADA');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Historial de solicitud",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/solicitudes/{{solicitudId}}/historial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "solicitudes",
+                "{{solicitudId}}",
+                "historial"
+              ]
+            },
+            "description": "Obtener el historial completo de cambios en una solicitud"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response es un array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (pm.response.json().length > 0) {",
+                  "    pm.test(\"Cada entrada tiene estructura HistorialEntryDTO correcta\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        jsonData.forEach(function(entrada) {",
+                  "            pm.expect(entrada).to.have.property('fechaHora');",
+                  "            pm.expect(entrada).to.have.property('accion');",
+                  "            pm.expect(entrada).to.have.property('observacion');",
+                  "            pm.expect(entrada).to.have.property('actorId');",
+                  "        });",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🔄 Flujos de Trabajo Completos",
+      "description": "Ejemplos de flujos completos del sistema",
+      "item": [
+        {
+          "name": "Flujo 1 - Registro y Login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "",
+              "host": [
+                ""
+              ]
+            },
+            "description": "PASOS DEL FLUJO:\n1. POST /auth/register - Registrar nuevo usuario\n2. POST /auth/login - Iniciar sesión (guarda token y userId)\n3. GET /usuarios/{{userId}} - Verificar usuario creado\n\nEjecuta estos 3 requests en orden para un flujo completo de registro e inicio de sesión."
+          }
+        },
+        {
+          "name": "Flujo 2 - Crear y Procesar Solicitud",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "",
+              "host": [
+                ""
+              ]
+            },
+            "description": "PASOS DEL FLUJO:\n1. POST /solicitudes - Crear una nueva solicitud (guarda solicitudId, estado: REGISTRADA)\n2. GET /solicitudes/{{solicitudId}} - Ver detalles iniciales\n3. GET /usuarios/responsables - Obtener responsables disponibles (guarda responsableId)\n4. PUT /solicitudes/{{solicitudId}}/clasificar - Clasificar (REGISTRADA → CLASIFICADA)\n5. PUT /solicitudes/{{solicitudId}}/asignar - Asignar responsable\n6. PUT /solicitudes/{{solicitudId}}/estado?nuevoEstado=EN_ATENCION - Cambiar a atención\n7. PUT /solicitudes/{{solicitudId}}/estado?nuevoEstado=ATENDIDA - Marcar como atendida\n8. PUT /solicitudes/{{solicitudId}}/cerrar - Cerrar (ATENDIDA → CERRADA)\n9. GET /solicitudes/{{solicitudId}}/historial - Ver historial completo\n\nEjecuta estos requests en orden para ver el flujo completo de una solicitud."
+          }
+        },
+        {
+          "name": "Flujo 3 - Gestión de Usuarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "",
+              "host": [
+                ""
+              ]
+            },
+            "description": "PASOS DEL FLUJO:\n1. POST /auth/register - Registrar usuario con rol ADMINISTRATIVO\n2. GET /usuarios - Listar todos los usuarios (verifica que esté activo)\n3. PATCH /usuarios/{{userId}}/desactivar - Desactivar usuario\n4. GET /usuarios/{{userId}} - Verificar que sigue existiendo\n5. PATCH /usuarios/{{userId}}/activar - Reactivar usuario\n6. GET /usuarios/responsables - Ver responsables (solo activos)\n\nEjecuta estos requests en orden para probar la gestión de usuarios."
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Variables globales para debugging\nif (!pm.environment.get('baseUrl')) {",
+          "    pm.environment.set('baseUrl', 'http://localhost:8080');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": []
+      }
+    }
+  ]
+}
