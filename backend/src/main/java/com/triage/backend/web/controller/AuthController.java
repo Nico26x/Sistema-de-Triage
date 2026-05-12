@@ -1,6 +1,7 @@
 package com.triage.backend.web.controller;
 
 import com.triage.backend.domain.entity.Usuario;
+import com.triage.backend.security.JwtUtil;
 import com.triage.backend.service.IAuthService;
 import com.triage.backend.web.dto.AuthRequestDTO;
 import com.triage.backend.web.dto.AuthResponseDTO;
@@ -16,9 +17,11 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     
     private final IAuthService authService;
+    private final JwtUtil jwtUtil;
     
-    public AuthController(IAuthService authService) {
+    public AuthController(IAuthService authService, JwtUtil jwtUtil) {
         this.authService = authService;
+        this.jwtUtil = jwtUtil;
     }
     
     @PostMapping("/register")
@@ -39,12 +42,14 @@ public class AuthController {
     public ResponseEntity<AuthResponseDTO> login(@RequestBody AuthRequestDTO req) {
         Usuario usuario = authService.autenticar(req);
         
-        // Por ahora, simplemente retornar un token placeholder
-        // En el Hito 3 se implementará JWT
-        AuthResponseDTO response = new AuthResponseDTO(
-            "placeholder-token-" + usuario.getId() + "-" + System.currentTimeMillis(),
-            "Bearer"
+        // Generar JWT real con datos del usuario
+        String token = jwtUtil.generarToken(
+            usuario.getId(),
+            usuario.getEmail(),
+            usuario.getRol().name()
         );
+        
+        AuthResponseDTO response = new AuthResponseDTO(token, "Bearer");
         
         return ResponseEntity.ok(response);
     }

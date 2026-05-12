@@ -244,4 +244,10 @@ public class SolicitudServiceImpl implements ISolicitudService {
             solicitud.getImpacto()
         );
     }
+    
+    @Override
+    public Solicitud obtenerSolicitud(Long id) {
+        return solicitudRepository.findById(id)
+            .orElseThrow(() -> new NotFoundException("Solicitud no encontrada"));
+    }
 }
